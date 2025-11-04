@@ -362,6 +362,29 @@ return {
 			desc = "Open a Scratch Buffer",
 		},
 
+		-- Grep visual selection and motion
+		{
+			"<leader>fw",
+			function()
+				local text = vim.fn.expand("<cword>")
+				Snacks.picker.grep({ search = text })
+			end,
+			desc = "Grep word under cursor",
+		},
+		{
+			"<leader>fw",
+			function()
+				-- Get visually selected text
+				vim.cmd('noau normal! "vy"')
+				local text = vim.fn.getreg("v")
+				-- Replace newlines with spaces
+				text = text:gsub("\n", " ")
+				Snacks.picker.grep({ search = text })
+			end,
+			desc = "Grep visual selection",
+			mode = "v",
+		},
+
 		-- Terminal
 		{
 			"<C-t>h",
@@ -465,5 +488,34 @@ return {
 		snacks.toggle.scroll():map("<leader>uS")
 		snacks.toggle.option("spell", { name = "Spelling" }):map("<leader>us")
 		snacks.toggle.option("wrap", { name = "Wrap" }):map("<leader>uw")
+
+		-- Motion-based grep function
+		_G.__snacks_grep_motion = function(type)
+			local saved_reg = vim.fn.getreg('"')
+			local saved_regtype = vim.fn.getregtype('"')
+
+			if type == "char" then
+				vim.cmd('noau normal! `[v`]"zy')
+			elseif type == "line" then
+				vim.cmd('noau normal! `[V`]"zy')
+			else
+				return
+			end
+
+			local text = vim.fn.getreg("z")
+			vim.fn.setreg('"', saved_reg, saved_regtype)
+
+			if text and text ~= "" then
+				-- Replace newlines with spaces
+				text = text:gsub("\n", " ")
+				snacks.picker.grep({ search = text })
+			end
+		end
+
+		-- Set up motion keymap after function is defined
+		vim.keymap.set("n", "gy", function()
+			vim.o.operatorfunc = "v:lua.__snacks_grep_motion"
+			return "g@"
+		end, { expr = true, desc = "Grep motion" })
 	end,
 }
