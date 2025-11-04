@@ -56,6 +56,10 @@ My personal Neovim configuration, rewritten for modern development workflows.
 - **snipe.nvim** - Quick buffer/symbol switching
 - **time-machine.nvim** - File history browser
 
+### Custom Plugins
+- **gcommit** - AI-powered commit message generation with clipboard integration
+- **copy** - Buffer path copying and cursor-agent integration with detour windows
+
 ## ⌨️ Key Bindings
 
 **Leader:** `Space` | **Local Leader:** `\`
@@ -91,6 +95,8 @@ My personal Neovim configuration, rewritten for modern development workflows.
 | `<leader>hp` | Preview hunk |
 | `]c` / `[c` | Next/previous hunk |
 | `<leader>gb` | Git blame line |
+| `<leader>gc` | Generate commit message (copy) |
+| `<leader>gC` | Generate commit message (commit) |
 | `<leader>gl` | LazyGit |
 | `<leader>go` | Open in browser |
 | `<leader>gi` | GitHub issues |
@@ -118,6 +124,8 @@ My personal Neovim configuration, rewritten for modern development workflows.
 | `s` | Flash jump |
 | `S` | Flash treesitter |
 | `<leader>y` | Yank to clipboard |
+| `<leader>yp` | Copy buffer path (`@file`) |
+| `<leader>yl` | Copy buffer path with line (`@file#123`) |
 | `<leader>p` | Paste from clipboard |
 | `<leader>ra` | Find and replace word |
 
@@ -134,6 +142,14 @@ My personal Neovim configuration, rewritten for modern development workflows.
 | `<leader>uh` | Toggle inlay hints |
 | `<leader>us` | Toggle spelling |
 | `<leader>uw` | Toggle wrap |
+
+### AI & Cursor-Agent
+| Key | Action |
+|-----|--------|
+| `<leader>a` | Open cursor-agent (detour) |
+| `<leader>ab` | Open cursor-agent with buffer |
+| `<leader>al` | Open cursor-agent with line |
+| `<leader>at` | Open cursor-agent (tab) |
 
 ## 🚀 Features
 
@@ -158,6 +174,24 @@ Snacks dashboard with quick actions, recent files, and startup time display.
 ### Session Persistence
 Auto-saves sessions per directory with multiple session slots.
 
+### AI-Powered Git Commits
+Generate commit messages using `gcommit` CLI tool:
+- Copy to clipboard with `<leader>gc`
+- Directly commit with `<leader>gC`
+
+### Buffer Path Copying
+Copy buffer paths in special format for AI tools:
+- `<leader>yp` - Copy as `@filename`
+- `<leader>yl` - Copy as `@filename#123` (with line number)
+- Works in visual mode for line ranges
+
+### Cursor-Agent Integration
+Open cursor-agent terminal with context:
+- Plain detour window (`<leader>a`)
+- With buffer path prefilled (`<leader>ab`)
+- With buffer path and line number (`<leader>al`)
+- In new tab (`<leader>at`)
+
 ## 📁 Structure
 
 ```
@@ -170,7 +204,10 @@ Auto-saves sessions per directory with multiple session slots.
 │   │   ├── keymaps.lua  # Global keybindings
 │   │   ├── autocmds.lua # Autocommands
 │   │   └── lazy.lua     # Plugin manager setup
-│   └── plugins/         # Plugin configurations (27 files)
+│   ├── plugins/         # Plugin configurations (29 files)
+│   └── custom/          # Custom plugins
+│       ├── gcommit.lua  # AI commit message generation
+│       └── copy.lua     # Buffer path copying & cursor-agent
 └── README.md
 ```
 
