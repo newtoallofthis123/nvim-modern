@@ -68,3 +68,14 @@ keymap.set("n", "<leader>w<Left>", "<C-w>h", { desc = "Go to left window" })
 keymap.set("n", "<leader>w<Down>", "<C-w>j", { desc = "Go to window below" })
 keymap.set("n", "<leader>w<Up>", "<C-w>k", { desc = "Go to window above" })
 keymap.set("n", "<leader>w<Right>", "<C-w>l", { desc = "Go to right window" })
+
+-- Theme switching
+keymap.set("n", "<leader>ll", function()
+	vim.o.background = "light"
+	vim.cmd("colorscheme lunaperche")
+end, { desc = "Switch to lunaperche light theme" })
+
+keymap.set("n", "<leader>ld", function()
+	vim.o.background = "dark"
+	vim.cmd("colorscheme rose-pine")
+end, { desc = "Switch to rose-pine dark theme" })

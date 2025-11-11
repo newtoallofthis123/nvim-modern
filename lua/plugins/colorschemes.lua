@@ -25,7 +25,36 @@ return {
 				},
 			})
 
-			vim.cmd("colorscheme rose-pine")
+			-- vim.cmd("colorscheme rose-pine")
+		end,
+	},
+	{
+		"ellisonleao/gruvbox.nvim",
+		priority = 1000,
+		config = function()
+			require("gruvbox").setup({
+				bold = false,
+				italic = {
+					strings = true,
+					emphasis = true,
+					comments = true,
+					operators = false,
+					folds = false,
+				},
+				contrast = "hard",
+				palette_overrides = {},
+				overrides = {
+					WhichKey = { bg = "NONE" },
+					WhichKeyNormal = { bg = "NONE" },
+					NormalFloat = { bg = "NONE" },
+					BlinkCmpMenu = { bg = "NONE" },
+					Pmenu = { bg = "NONE" },
+					PmenuThumb = { bg = "NONE" },
+				},
+				dim_inactive = false,
+				transparent_mode = true,
+			})
+			vim.cmd("colorscheme gruvbox")
 		end,
 	},
 }

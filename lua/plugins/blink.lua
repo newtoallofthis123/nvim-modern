@@ -49,7 +49,7 @@ return {
 		},
 
 		sources = {
-			default = { "copilot", "lsp", "snippets", "buffer", "emoji", "path" },
+			default = { "fuzzy-path", "copilot", "lsp", "snippets", "buffer", "emoji", "path" },
 			providers = {
 				copilot = {
 					name = "copilot",
@@ -69,6 +69,11 @@ return {
 					should_show_items = function()
 						return vim.tbl_contains({ "gitcommit", "markdown" }, vim.o.filetype)
 					end,
+				},
+				["fuzzy-path"] = {
+					name = "Fuzzy Path",
+					module = "blink-cmp-fuzzy-path",
+					score_offset = 0,
 				},
 			},
 		},
