@@ -25,7 +25,7 @@ return {
 				},
 			})
 
-			-- vim.cmd("colorscheme rose-pine")
+			vim.cmd("colorscheme rose-pine")
 		end,
 	},
 	{
@@ -33,7 +33,9 @@ return {
 		priority = 1000,
 		config = function()
 			require("gruvbox").setup({
-				bold = false,
+				terminal_colors = true,
+				invert_selection = true,
+				bold = true,
 				italic = {
 					strings = true,
 					emphasis = true,
@@ -51,10 +53,10 @@ return {
 					Pmenu = { bg = "NONE" },
 					PmenuThumb = { bg = "NONE" },
 				},
-				dim_inactive = false,
+				dim_inactive = true,
 				transparent_mode = true,
 			})
-			vim.cmd("colorscheme gruvbox")
+			-- vim.cmd("colorscheme gruvbox")
 		end,
 	},
 }

@@ -4,94 +4,24 @@ return {
 	config = function()
 		-- Function to get colors based on current colorscheme and background
 		local function get_colors()
-			local colorscheme = vim.g.colors_name or "gruvbox"
-			local background = vim.o.background or "dark"
+			-- local colorscheme = vim.g.colors_name or "gruvbox"
+			-- local background = vim.o.background or "dark"
 
-			if colorscheme == "gruvbox" then
-				if background == "light" then
-					-- Gruvbox light colors
-					return {
-						rose = "#cc241d",
-						pine = "#458588",
-						foam = "#689d6a",
-						iris = "#b16286",
-						gold = "#d79921",
-						love = "#cc241d",
-						base = "#fbf1c7",
-						surface = "#f9f5d7",
-						overlay = "#ebdbb2",
-						muted = "#928374",
-						subtle = "#7c6f64",
-						text = "#3c3836",
-					}
-				else
-					-- Gruvbox dark colors
-					return {
-						rose = "#fb4934",
-						pine = "#83a598",
-						foam = "#8ec07c",
-						iris = "#d3869b",
-						gold = "#fabd2f",
-						love = "#fb4934",
-						base = "#282828",
-						surface = "#32302f",
-						overlay = "#504945",
-						muted = "#928374",
-						subtle = "#665c54",
-						text = "#ebdbb2",
-					}
-				end
-			elseif colorscheme == "lunaperche" then
-				if background == "light" then
-					-- Lunaperche light mode
-					return {
-						rose = "#FFD700",
-						pine = "#87CEEB",
-						foam = "#87CEEB",
-						iris = "#C0C0C0",
-						gold = "#FFD700",
-						love = "#FFD700",
-						base = "#FFFFFF",
-						surface = "#F0F0F0",
-						overlay = "#E0E0E0",
-						muted = "#AAAAAA",
-						subtle = "#777777",
-						text = "#000000",
-					}
-				else
-					-- Lunaperche dark mode
-					return {
-						rose = "#FFD700",
-						pine = "#87CEEB",
-						foam = "#87CEEB",
-						iris = "#C0C0C0",
-						gold = "#FFD700",
-						love = "#FFD700",
-						base = "#000000",
-						surface = "#111111",
-						overlay = "#1A1A1A",
-						muted = "#555555",
-						subtle = "#888888",
-						text = "#FFFFFF",
-					}
-				end
-			else
-				-- Gruvbox dark (default)
-				return {
-					rose = "#fb4934",
-					pine = "#83a598",
-					foam = "#8ec07c",
-					iris = "#d3869b",
-					gold = "#fabd2f",
-					love = "#fb4934",
-					base = "#282828",
-					surface = "#32302f",
-					overlay = "#504945",
-					muted = "#928374",
-					subtle = "#665c54",
-					text = "#ebdbb2",
-				}
-			end
+			return {
+
+				rose = "#ebbcba",
+				pine = "#31748f",
+				foam = "#9ccfd8",
+				iris = "#c4a7e7",
+				gold = "#f6c177",
+				love = "#eb6f92",
+				base = "#191724",
+				surface = "#1f1d2e",
+				overlay = "#26233a",
+				muted = "#6e6a86",
+				subtle = "#908caa",
+				text = "#e0def4",
+			}
 		end
 
 		local colors = get_colors()
