@@ -25,7 +25,7 @@ return {
 				},
 			})
 
-			vim.cmd("colorscheme rose-pine")
+			-- vim.cmd("colorscheme rose-pine")
 		end,
 	},
 	{
@@ -57,6 +57,34 @@ return {
 				transparent_mode = true,
 			})
 			-- vim.cmd("colorscheme gruvbox")
+		end,
+	},
+	{
+		"loctvl842/monokai-pro.nvim",
+		priority = 1000,
+		config = function()
+			require("monokai-pro").setup({
+				transparent_background = true,
+				filter = "spectrum",
+				background_clear = {
+					"telescope",
+					"which-key",
+					"nvim-tree",
+					"bufferline",
+					"float_win",
+					"renamer",
+					"toggleterm",
+					"blink",
+				},
+				override = function()
+					return {
+						Pmenu = { bg = "NONE" },
+						PmenuThumb = { bg = "NONE" },
+						BlinkCmpMenu = { bg = "NONE" },
+					}
+				end,
+			})
+			vim.cmd([[colorscheme monokai-pro-spectrum]])
 		end,
 	},
 }
