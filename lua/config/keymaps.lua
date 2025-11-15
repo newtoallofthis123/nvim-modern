@@ -69,6 +69,11 @@ keymap.set("n", "<leader>w<Down>", "<C-w>j", { desc = "Go to window below" })
 keymap.set("n", "<leader>w<Up>", "<C-w>k", { desc = "Go to window above" })
 keymap.set("n", "<leader>w<Right>", "<C-w>l", { desc = "Go to right window" })
 
+-- Window resize/maximize
+keymap.set("n", "<leader>wm", "<C-w>_<C-w>|", { desc = "Maximize current split" })
+keymap.set("n", "<leader>we", "<C-w>=", { desc = "Equalize split sizes" })
+keymap.set("n", "<leader>wo", "<C-w>o", { desc = "Close all other splits" })
+
 -- Theme switching
 keymap.set("n", "<leader>ll", function()
 	vim.o.background = "light"

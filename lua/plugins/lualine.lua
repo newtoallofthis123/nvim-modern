@@ -8,19 +8,18 @@ return {
 			-- local background = vim.o.background or "dark"
 
 			return {
-				-- Monokai Pro Spectrum colors
-				rose = "#FC618D", -- red/pink
-				pine = "#5AD4E6", -- cyan
-				foam = "#5AD4E6", -- cyan
-				iris = "#948AE3", -- purple
-				gold = "#FFD866", -- yellow
-				love = "#FC618D", -- red
-				base = "#222222", -- background
-				surface = "#2D2A2E", -- slightly lighter bg
-				overlay = "#363337", -- even lighter bg
-				muted = "#69676C", -- comment gray
-				subtle = "#939293", -- lighter gray
-				text = "#F7F1FF", -- foreground
+				rose = "#ebbcba",
+				pine = "#31748f",
+				foam = "#9ccfd8",
+				iris = "#c4a7e7",
+				gold = "#f6c177",
+				love = "#eb6f92",
+				base = "#191724",
+				surface = "#1f1d2e",
+				overlay = "#26233a",
+				muted = "#6e6a86",
+				subtle = "#908caa",
+				text = "#e0def4",
 			}
 		end
 

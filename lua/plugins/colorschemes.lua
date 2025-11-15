@@ -25,7 +25,7 @@ return {
 				},
 			})
 
-			-- vim.cmd("colorscheme rose-pine")
+			vim.cmd("colorscheme rose-pine")
 		end,
 	},
 	{
@@ -84,7 +84,7 @@ return {
 					}
 				end,
 			})
-			vim.cmd([[colorscheme monokai-pro-spectrum]])
+			-- vim.cmd([[colorscheme monokai-pro-spectrum]])
 		end,
 	},
 }
