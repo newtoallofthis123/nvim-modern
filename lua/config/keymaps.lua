@@ -73,14 +73,3 @@ keymap.set("n", "<leader>w<Right>", "<C-w>l", { desc = "Go to right window" })
 keymap.set("n", "<leader>wm", "<C-w>_<C-w>|", { desc = "Maximize current split" })
 keymap.set("n", "<leader>we", "<C-w>=", { desc = "Equalize split sizes" })
 keymap.set("n", "<leader>wo", "<C-w>o", { desc = "Close all other splits" })
-
--- Theme switching
-keymap.set("n", "<leader>ll", function()
-	vim.o.background = "light"
-	vim.cmd("colorscheme lunaperche")
-end, { desc = "Switch to lunaperche light theme" })
-
-keymap.set("n", "<leader>ld", function()
-	vim.o.background = "dark"
-	vim.cmd("colorscheme rose-pine")
-end, { desc = "Switch to rose-pine dark theme" })

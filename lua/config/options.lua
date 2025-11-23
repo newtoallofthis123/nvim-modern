@@ -28,6 +28,19 @@ vim.opt.showtabline = 2
 
 vim.opt.mouse = "a"
 
+vim.g.clipboard = {
+	name = "macOS-clipboard",
+	copy = {
+		["+"] = "pbcopy",
+		["*"] = "pbcopy",
+	},
+	paste = {
+		["+"] = "pbpaste",
+		["*"] = "pbpaste",
+	},
+	cache_enabled = 0,
+}
+
 vim.opt.undofile = true
 vim.opt.undodir = vim.fn.expand("~/.undodir")
 

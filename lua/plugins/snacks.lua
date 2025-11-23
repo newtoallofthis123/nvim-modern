@@ -117,6 +117,23 @@ _   __            __   _
 						})
 					end,
 				},
+				create_file_in_directory = {
+					action = function(picker, item)
+						if not item then
+							return
+						end
+						local dir = vim.fn.fnamemodify(item.file, ":p:h")
+						require("snacks").input({
+							prompt = "Filename: ",
+						}, function(filename)
+							if filename and filename ~= "" then
+								local filepath = dir .. "/" .. filename
+								vim.cmd("edit " .. vim.fn.fnameescape(filepath))
+								picker:close()
+							end
+						end)
+					end,
+				},
 			},
 			matcher = {
 				frecency = true,
@@ -132,6 +149,7 @@ _   __            __   _
 					},
 					["s"] = { "search_in_directory", desc = "Search in directory" },
 					["S"] = { "search_files_in_directory", desc = "Search files in directory" },
+					["%"] = { "create_file_in_directory", desc = "Create file in directory" },
 				},
 			},
 			sources = {
@@ -154,6 +172,7 @@ _   __            __   _
 							desc = "Set glob pattern",
 						},
 						["v"] = { "edit_vsplit" },
+						["%"] = { "create_file_in_directory", desc = "Create file in directory" },
 					},
 				},
 			},

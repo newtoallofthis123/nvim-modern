@@ -1,5 +1,6 @@
 return {
 	"tversteeg/registers.nvim",
+	event = "BufRead",
 	cmd = "Registers",
 	config = function()
 		return require("registers").setup({})
