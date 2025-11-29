@@ -1,6 +1,5 @@
 local M = {}
 
--- Function to run gcommit and get the result
 local function run_gcommit()
 	local handle = io.popen("gcommit 2>&1")
 	if not handle then
@@ -27,7 +26,6 @@ local function run_gcommit()
 	return result
 end
 
--- GcommitCopy: Copy gcommit result to clipboard
 function M.gcommit_copy()
 	local commit_msg = run_gcommit()
 	if not commit_msg then
@@ -47,7 +45,6 @@ function M.gcommit_copy()
 	vim.notify("Commit message copied to clipboard: " .. commit_msg, vim.log.levels.INFO)
 end
 
--- Gcommit: Run gcommit and prefill Git commit
 function M.gcommit()
 	local commit_msg = run_gcommit()
 	if not commit_msg then
@@ -69,7 +66,6 @@ function M.gcommit()
 	vim.notify("Git commit initiated with message: " .. commit_msg, vim.log.levels.INFO)
 end
 
--- Setup function to register commands and keybindings
 function M.setup()
 	-- Register commands
 	vim.api.nvim_create_user_command("GcommitCopy", M.gcommit_copy, {
