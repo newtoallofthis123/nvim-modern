@@ -93,8 +93,6 @@ return {
 			capabilities = capabilities,
 		}
 
-		vim.keymap.set("n", "<leader>vd", vim.diagnostic.open_float, opts)
-
 		vim.diagnostic.config({
 			virtual_text = true,
 			signs = {

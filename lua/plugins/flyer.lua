@@ -7,7 +7,8 @@ return {
 			icon = "nvim_web_devicons",
 		})
 
-		vim.keymap.set("n", "-", "<CMD>Fyler kind=split_right_most<CR>", { desc = "Open parent directory" })
-		vim.keymap.set("n", "<leader>e", "<CMD>Fyler<CR>", { desc = "Open parent directory" })
+		-- vim.keymap.set("n", "-", "<CMD>Fyler kind=split_right_most<CR>", { desc = "Open parent directory" })
+		-- vim.keymap.set("n", "<leader>e", "<CMD>Fyler<CR>", { desc = "Open parent directory" })
 	end,
+	enabled = false,
 }

@@ -73,3 +73,56 @@ keymap.set("n", "<leader>w<Right>", "<C-w>l", { desc = "Go to right window" })
 keymap.set("n", "<leader>wm", "<C-w>_<C-w>|", { desc = "Maximize current split" })
 keymap.set("n", "<leader>we", "<C-w>=", { desc = "Equalize split sizes" })
 keymap.set("n", "<leader>wo", "<C-w>o", { desc = "Close all other splits" })
+
+keymap.set("n", "<leader>vd", vim.diagnostic.open_float, { noremap = true, desc = "Open diagnostic float" })
+
+-- Copy diagnostics on current line to clipboard
+keymap.set("n", "<leader>vy", function()
+	local diagnostics = vim.diagnostic.get(0, { lnum = vim.fn.line(".") - 1 })
+	if #diagnostics == 0 then
+		vim.notify("No diagnostics on current line", vim.log.levels.INFO)
+		return
+	end
+	local messages = {}
+	for _, diag in ipairs(diagnostics) do
+		table.insert(messages, diag.message)
+	end
+	local text = table.concat(messages, "\n")
+	vim.fn.setreg("+", text)
+	vim.notify("Copied diagnostics to clipboard", vim.log.levels.INFO)
+end, { noremap = true, desc = "Copy diagnostics to clipboard" })
+
+-- Open diagnostics in horizontal split
+keymap.set("n", "<leader>vs", function()
+	local diagnostics = vim.diagnostic.get(0, { lnum = vim.fn.line(".") - 1 })
+	if #diagnostics == 0 then
+		vim.notify("No diagnostics on current line", vim.log.levels.INFO)
+		return
+	end
+	local messages = {}
+	for _, diag in ipairs(diagnostics) do
+		table.insert(
+			messages,
+			string.format(
+				"[%s] %s",
+				diag.severity == 1 and "ERROR"
+					or diag.severity == 2 and "WARN"
+					or diag.severity == 3 and "INFO"
+					or "HINT",
+				diag.message
+			)
+		)
+	end
+
+	-- Create a small horizontal split below
+	vim.cmd("botright 10split")
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_win_set_buf(0, buf)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, messages)
+	vim.bo[buf].modifiable = false
+	vim.bo[buf].buftype = "nofile"
+	vim.bo[buf].bufhidden = "wipe"
+
+	-- Set a keymap to close the split easily
+	vim.keymap.set("n", "q", ":q<CR>", { buffer = buf, noremap = true, silent = true })
+end, { noremap = true, desc = "Open diagnostics in split" })
