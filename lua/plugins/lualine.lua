@@ -47,10 +47,34 @@ return {
 			t = colors.pine, -- Terminal
 		}
 
+		-- Blocky retro mode symbols with letters
+		local mode_display = {
+			n = "▓ N",
+			i = "▌ I",
+			v = "█ V",
+			V = "█ V",
+			[""] = "█ V",
+			c = "▒ C",
+			no = "▓ N",
+			s = "▓ S",
+			S = "▓ S",
+			[""] = "▓ S",
+			ic = "▌ I",
+			R = "▓ R",
+			Rv = "▓ R",
+			cv = "▒ E",
+			ce = "▒ E",
+			r = "░ P",
+			rm = "░ M",
+			["r?"] = "░ ?",
+			["!"] = "▒ !",
+			t = "░ T",
+		}
+
 		local mode = {
-			"mode",
-			fmt = function(str)
-				return str
+			function()
+				local mode_code = vim.fn.mode()
+				return mode_display[mode_code] or "▓ N"
 			end,
 			color = function()
 				local mode_code = vim.fn.mode()
@@ -60,6 +84,7 @@ return {
 					gui = "bold",
 				}
 			end,
+			padding = { left = 1, right = 1 },
 		}
 
 		local branch = {
@@ -68,11 +93,35 @@ return {
 			color = { fg = colors.iris, gui = "bold" },
 		}
 
-		local separator = {
+		local separator_left = {
 			function()
-				return "<>"
+				return "["
 			end,
 			color = { fg = colors.muted },
+			padding = { left = 1, right = 0 },
+		}
+
+		local separator_right = {
+			function()
+				return "]"
+			end,
+			color = { fg = colors.muted },
+			padding = { left = 0, right = 1 },
+		}
+
+		local diff = {
+			"diff",
+			symbols = { added = "▓ ", modified = "▒ ", removed = "░ " },
+			diff_color = {
+				added = { fg = colors.foam },
+				modified = { fg = colors.gold },
+				removed = { fg = colors.love },
+			},
+		}
+
+		local progress = {
+			"progress",
+			color = { fg = colors.subtle },
 			padding = { left = 1, right = 1 },
 		}
 
@@ -92,16 +141,33 @@ return {
 		}
 
 		local filename = {
-			"filename",
-			file_status = true,
-			newfile_status = true,
-			path = 1, -- 0 = just filename, 1 = relative path, 2 = absolute path
-			symbols = {
-				modified = "[+]",
-				readonly = "[-]",
-				unnamed = "[No Name]",
-				newfile = "[New]",
-			},
+			function()
+				local filepath = vim.fn.expand("%:p")
+				if filepath == "" then
+					return "[No Name]"
+				end
+				local cwd = vim.fn.getcwd()
+				local relative_path = vim.fn.fnamemodify(filepath, ":~:.")
+
+				-- If file is outside cwd, show path from home
+				if not filepath:find(cwd, 1, true) then
+					relative_path = vim.fn.fnamemodify(filepath, ":~")
+				end
+
+				-- Add status symbols
+				local symbols = ""
+				if vim.bo.modified then
+					symbols = symbols .. "[+]"
+				end
+				if vim.bo.readonly then
+					symbols = symbols .. "[-]"
+				end
+				if vim.bo.buftype == "nofile" then
+					symbols = symbols .. "[New]"
+				end
+
+				return relative_path .. (symbols ~= "" and " " .. symbols or "")
+			end,
 			color = { fg = colors.text, gui = "bold" },
 		}
 
@@ -177,17 +243,40 @@ return {
 				lualine_b = {
 					mode,
 					filetype,
-					separator,
+					separator_left,
 					lsp_status,
 					diagnostics,
+					separator_right,
 				},
 				lualine_c = {},
 				lualine_x = {
+					diff,
+					separator_left,
 					branch,
+					separator_right,
 					searchcount,
+					separator_left,
 					filename,
+					progress,
 					location,
+					separator_right,
 				},
+				lualine_y = {},
+				lualine_z = {},
+			},
+			winbar = {
+				lualine_a = {},
+				lualine_b = {},
+				lualine_c = {},
+				lualine_x = {},
+				lualine_y = {},
+				lualine_z = {},
+			},
+			inactive_winbar = {
+				lualine_a = {},
+				lualine_b = {},
+				lualine_c = {},
+				lualine_x = {},
 				lualine_y = {},
 				lualine_z = {},
 			},

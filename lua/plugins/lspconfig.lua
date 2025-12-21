@@ -83,6 +83,20 @@ return {
 			capabilities = capabilities,
 		}
 
+		vim.lsp.config.gopls = {
+			capabilities = capabilities,
+			filetypes = { "go" },
+		}
+
+		vim.lsp.config.golines = {
+			capabilities = capabilities,
+			filetypes = { "go" },
+		}
+		vim.lsp.config.goimports = {
+			capabilities = capabilities,
+			filetypes = { "go" },
+		}
+
 		vim.lsp.config("expert", {
 			cmd = { "/Users/noob/.bin/expert_darwin_amd64" },
 			root_markers = { "mix.exs", ".git" },
@@ -116,6 +130,10 @@ return {
 			"emmet_ls",
 			"rust_analyzer",
 			"expert",
+			"gopls",
+			"golines",
+			"goimports-reviser",
+			"goimports",
 			"copilot_language_server",
 			"astro",
 		})

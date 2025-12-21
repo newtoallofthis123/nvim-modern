@@ -25,6 +25,8 @@ vim.opt.compatible = false
 vim.opt.path:append("**")
 vim.opt.wildignore:append("**/.git/**")
 vim.opt.showtabline = 2
+vim.opt.winbar = " " -- Add spacing below tabline
+vim.opt.laststatus = 3 -- Global statusline
 
 vim.opt.mouse = "a"
 

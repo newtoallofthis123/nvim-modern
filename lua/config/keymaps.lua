@@ -16,6 +16,7 @@ keymap.set("n", "<leader>ra", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Lef
 
 keymap.set("n", "<leader>bn", ":bn<CR>", { noremap = true })
 keymap.set("n", "<leader>bp", ":bp<CR>", { noremap = true })
+keymap.set("n", "<leader>bb", ":ls<CR>:b ", { noremap = true, desc = "List buffers and switch" })
 
 keymap.set("n", "<leader>tn", ":$tabnew<CR>", { noremap = true })
 keymap.set("n", "<leader>tq", ":tabclose<CR>", { noremap = true })
