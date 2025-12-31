@@ -48,6 +48,11 @@ return {
 			},
 		}
 
+		vim.lsp.config.ty = {
+			capabilities = capabilities,
+			settings = {},
+		}
+
 		vim.lsp.config.ts_ls = {
 			capabilities = capabilities,
 			init_options = {
@@ -125,7 +130,7 @@ return {
 		-- Enable all configured LSP servers
 		vim.lsp.enable({
 			"lua_ls",
-			"pyright",
+			-- "pyright",
 			"ts_ls",
 			"emmet_ls",
 			"rust_analyzer",
@@ -136,6 +141,7 @@ return {
 			"goimports",
 			"copilot_language_server",
 			"astro",
+			"ty",
 		})
 	end,
 }

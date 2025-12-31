@@ -211,7 +211,7 @@ _   __            __   _
 
 		-- Pickers
 		{
-			"<leader>b",
+			"<leader>B",
 			function()
 				Snacks.picker.buffers()
 			end,
@@ -258,6 +258,20 @@ _   __            __   _
 				Snacks.picker.grep()
 			end,
 			desc = "Grep in Files",
+		},
+		{
+			"<leader>fx",
+			function()
+				local ext = vim.fn.expand("%:e")
+				if ext and ext ~= "" then
+					Snacks.picker.grep({
+						args = { "--glob=*." .. ext },
+					})
+				else
+					vim.notify("Current buffer has no file extension", vim.log.levels.WARN)
+				end
+			end,
+			desc = "Grep in Files (same extension)",
 		},
 		{
 			"<leader>gf",

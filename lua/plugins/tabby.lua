@@ -53,7 +53,7 @@
 								modified,
 								"|",
 								hl = hl,
-								margin = "  ",
+								margin = " ",
 							}
 						end),
 						line.spacer(),
@@ -72,10 +72,6 @@
 
 			-- Custom header highlight with yellow color
 			vim.api.nvim_set_hl(0, "TabLineHeader", { fg = "#f6c177", bg = "NONE", bold = true })
-
-			-- Transparent winbar
-			vim.api.nvim_set_hl(0, "WinBar", { bg = "NONE" })
-			vim.api.nvim_set_hl(0, "WinBarNC", { bg = "NONE" })
 		end,
 		keys = {
 			{ "<leader>tt", ":Tabby pick_window<CR>", desc = "Pick a window to focus" },
