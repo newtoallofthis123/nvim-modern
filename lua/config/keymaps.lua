@@ -1,6 +1,6 @@
 local keymap = vim.keymap
 
-keymap.set("n", "<leader>n", ":e <Space>", { noremap = true })
+keymap.set("n", "<leader>nn", ":e <Space>", { noremap = true })
 
 keymap.set({ "n", "v" }, "<leader>y", [["+y]])
 keymap.set("n", "<leader>Y", [["+Y]])
@@ -127,3 +127,28 @@ keymap.set("n", "<leader>vs", function()
 	-- Set a keymap to close the split easily
 	vim.keymap.set("n", "q", ":q<CR>", { buffer = buf, noremap = true, silent = true })
 end, { noremap = true, desc = "Open diagnostics in split" })
+
+-- Git commands
+vim.keymap.set("n", "<leader>gd", function()
+	vim.fn.setqflist({}, "r", {
+		title = "Git Diff",
+		lines = vim.fn.systemlist("git jump --stdout diff"),
+	})
+	vim.cmd("copen")
+end, { desc = "View git diff in quickfix" })
+
+vim.keymap.set("n", "<leader>gmc", function()
+	vim.fn.setqflist({}, "r", {
+		title = "Git Merge Conflicts",
+		lines = vim.fn.systemlist("git jump --stdout merge"),
+	})
+	vim.cmd("copen")
+end, { desc = "View git merge conflicts in quickfix" })
+
+vim.keymap.set("n", "<leader>gp", function()
+	vim.fn.system("gh pr view --web")
+end, { desc = "Open PR in web browser" })
+
+vim.keymap.set("n", "<leader>gr", function()
+	vim.fn.system("gh repo view --web")
+end, { desc = "Open repo in web browser" })
