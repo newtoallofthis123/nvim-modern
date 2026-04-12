@@ -62,10 +62,6 @@ return {
 			},
 		}
 
-		vim.lsp.config.prettier = {
-			capabilities = capabilities,
-		}
-
 		vim.lsp.config.emmet_ls = {
 			capabilities = capabilities,
 		}

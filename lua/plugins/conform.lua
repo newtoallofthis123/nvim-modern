@@ -16,7 +16,10 @@ return {
 		formatters_by_ft = {
 			lua = { "stylua" },
 			python = { "isort", "black" },
-			javascript = { "prettierd", "prettier", stop_after_first = true },
+			javascript = { "oxfmt" },
+			typescript = { "oxfmt" },
+			javascriptreact = { "oxfmt" },
+			typescriptreact = { "oxfmt" },
 			elixir = { "expert" },
 		},
 		default_format_opts = {

@@ -20,20 +20,37 @@ return {
 			end,
 			float_opts = {
 				border = "curved",
-				width = function() return math.floor(vim.o.columns * 0.85) end,
-				height = function() return math.floor(vim.o.lines * 0.85) end,
+				width = function()
+					return math.floor(vim.o.columns * 0.85)
+				end,
+				height = function()
+					return math.floor(vim.o.lines * 0.85)
+				end,
 			},
 			shade_terminals = false,
-			on_open = function(term)
-				vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<S-Esc>", [[<C-\><C-n>]], { noremap = true, silent = true })
-			end,
 		})
 
 		local Terminal = require("toggleterm.terminal").Terminal
 
-		local claude_float = Terminal:new({ cmd = "claude", direction = "float", hidden = true, display_name = "Claude" })
-		local claude_vertical = Terminal:new({ cmd = "claude", direction = "vertical", hidden = true, display_name = "Claude" })
-		local claude_tab = Terminal:new({ cmd = "claude", direction = "tab", hidden = true, display_name = "Claude" })
+		local function on_open(term)
+			local bopts = { noremap = true, silent = true }
+			local bmap = function(lhs, rhs)
+				vim.api.nvim_buf_set_keymap(term.bufnr, "t", lhs, rhs, bopts)
+			end
+			bmap("<C-_>", [[<C-\><C-n>]])
+			bmap("<C-t>n", [[<C-\><C-n>]])
+			bmap("<C-t><Right>", [[<cmd>tabnext<cr>]])
+			bmap("<C-t><Left>", [[<cmd>tabprevious<cr>]])
+			for i = 1, 9 do
+				bmap("<C-t>" .. i, "<cmd>tabn " .. i .. "<cr>")
+			end
+		end
+
+		local claude_float =
+			Terminal:new({ cmd = "claude", direction = "float", hidden = true, display_name = "Claude", on_open = on_open })
+		local claude_vertical =
+			Terminal:new({ cmd = "claude", direction = "vertical", hidden = true, display_name = "Claude", on_open = on_open })
+		local claude_tab = Terminal:new({ cmd = "claude", direction = "tab", hidden = true, display_name = "Claude", on_open = on_open })
 
 		local claude_terms = { claude_float, claude_vertical, claude_tab }
 
@@ -46,9 +63,15 @@ return {
 			term:toggle()
 		end
 
-		vim.keymap.set("n", "<leader>cf", function() toggle_claude(claude_float) end, { desc = "Claude (float)" })
-		vim.keymap.set("n", "<leader>cv", function() toggle_claude(claude_vertical) end, { desc = "Claude (vertical)" })
-		vim.keymap.set("n", "<leader>ct", function() toggle_claude(claude_tab) end, { desc = "Claude (tab)" })
+		vim.keymap.set("n", "<leader>cf", function()
+			toggle_claude(claude_float)
+		end, { desc = "Claude (float)" })
+		vim.keymap.set("n", "<leader>cv", function()
+			toggle_claude(claude_vertical)
+		end, { desc = "Claude (vertical)" })
+		vim.keymap.set("n", "<leader>ct", function()
+			toggle_claude(claude_tab)
+		end, { desc = "Claude (tab)" })
 		vim.keymap.set("n", "<leader>cq", function()
 			for _, t in ipairs(claude_terms) do
 				if t:is_open() then

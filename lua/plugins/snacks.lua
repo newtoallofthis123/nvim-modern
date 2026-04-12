@@ -327,14 +327,6 @@ _   __            __   _
 			end,
 			desc = "Spelling Suggestions",
 		},
-		{
-			"<leader>fe",
-			function()
-				Snacks.picker.smart()
-			end,
-			desc = "Smart Search",
-		},
-
 		-- Git stuff
 		{
 			"<leader>gb",

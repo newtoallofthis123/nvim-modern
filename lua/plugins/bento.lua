@@ -34,11 +34,7 @@ return {
 				require("bento").open()
 				-- Simulate pressing backspace to enter delete mode
 				vim.defer_fn(function()
-					vim.api.nvim_feedkeys(
-						vim.api.nvim_replace_termcodes("<BS>", true, false, true),
-						"n",
-						false
-					)
+					vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<BS>", true, false, true), "n", false)
 				end, 50)
 			end,
 			desc = "Delete buffers (Bento)",
