@@ -46,11 +46,27 @@ return {
 			end
 		end
 
-		local claude_float =
-			Terminal:new({ cmd = "claude", direction = "float", hidden = true, display_name = "Claude", on_open = on_open })
-		local claude_vertical =
-			Terminal:new({ cmd = "claude", direction = "vertical", hidden = true, display_name = "Claude", on_open = on_open })
-		local claude_tab = Terminal:new({ cmd = "claude", direction = "tab", hidden = true, display_name = "Claude", on_open = on_open })
+		local claude_float = Terminal:new({
+			cmd = "claude --model opus --dangerously-skip-permissions",
+			direction = "float",
+			hidden = true,
+			display_name = "Claude",
+			on_open = on_open,
+		})
+		local claude_vertical = Terminal:new({
+			cmd = "claude --model opus --dangerously-skip-permissions",
+			direction = "vertical",
+			hidden = true,
+			display_name = "Claude",
+			on_open = on_open,
+		})
+		local claude_tab = Terminal:new({
+			cmd = "claude --model opus --dangerously-skip-permissions",
+			direction = "tab",
+			hidden = true,
+			display_name = "Claude",
+			on_open = on_open,
+		})
 
 		local claude_terms = { claude_float, claude_vertical, claude_tab }
 

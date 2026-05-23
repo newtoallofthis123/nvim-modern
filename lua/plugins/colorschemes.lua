@@ -11,7 +11,7 @@ return {
 				extend_background_behind_borders = true,
 				styles = {
 					bold = true,
-					italic = false,
+					italic = true,
 					transparency = true,
 				},
 				highlight_groups = {
