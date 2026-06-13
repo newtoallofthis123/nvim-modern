@@ -5,11 +5,6 @@ return {
 		opts = {},
 	},
 	{
-		"chrisgrieser/nvim-early-retirement",
-		config = true,
-		event = "VeryLazy",
-	},
-	{
 		"tpope/vim-fugitive",
 		cmd = { "Git", "G", "Gdiffsplit", "Gread", "Gwrite", "Gblame", "Glog", "GBrowse" },
 	},
