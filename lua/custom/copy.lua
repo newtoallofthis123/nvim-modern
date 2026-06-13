@@ -67,11 +67,11 @@ function M.setup()
 		desc = "Copy current buffer path with line number to clipboard (@filename#123 format)",
 	})
 
-	-- Set keybindings
+	-- Set keybindings (copy-context group: paste @file refs to the LLM)
 	local keymap = vim.keymap.set
-	keymap("n", "<leader>bp", M.copy_buffer_path, { desc = "Copy buffer path (@file)" })
-	keymap("n", "<leader>bl", M.copy_buffer_path_with_line, { desc = "Copy buffer path with line (@file#123)" })
-	keymap("v", "<leader>bl", M.copy_buffer_path_with_line, { desc = "Copy buffer path with line range" })
+	keymap("n", "<leader>cp", M.copy_buffer_path, { desc = "Copy buffer path (@file)" })
+	keymap("n", "<leader>cl", M.copy_buffer_path_with_line, { desc = "Copy buffer path with line (@file#123)" })
+	keymap("v", "<leader>cl", M.copy_buffer_path_with_line, { desc = "Copy buffer path with line range" })
 end
 
 return M

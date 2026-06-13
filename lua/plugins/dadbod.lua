@@ -6,7 +6,7 @@ return {
 	},
 	cmd = { "DBUI", "DBUIToggle", "DBUIAddConnection", "DBUIFindBuffer" },
 	keys = {
-		{ "<leader>db", "<cmd>DBUIToggle<cr>", desc = "Toggle DBUI" },
+		{ "<leader>xd", "<cmd>DBUIToggle<cr>", desc = "Database UI (DBUI)" },
 	},
 	init = function()
 		vim.g.db_ui_env_variable_url = "DATABASE_URL"

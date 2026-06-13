@@ -2,19 +2,23 @@ return {
 	"chrisgrieser/nvim-scissors",
 	dependencies = "nvim-telescope/telescope.nvim",
 	keys = {
-		{ "<leader>se", desc = "Snippet: Edit" },
-		{ "<leader>sa", mode = { "n", "x" }, desc = "Snippet: Add" },
+		{
+			"<leader>xs",
+			function()
+				require("scissors").editSnippet()
+			end,
+			desc = "Snippet: Edit",
+		},
+		{
+			"<leader>xS",
+			mode = { "n", "x" },
+			function()
+				require("scissors").addNewSnippet()
+			end,
+			desc = "Snippet: Add",
+		},
 	},
 	opts = {
 		snippetDir = vim.fn.stdpath("config") .. "/snippets",
 	},
-	config = function()
-		vim.keymap.set("n", "<leader>se", function()
-			require("scissors").editSnippet()
-		end, { desc = "Snippet: Edit" })
-
-		vim.keymap.set({ "n", "x" }, "<leader>sa", function()
-			require("scissors").addNewSnippet()
-		end, { desc = "Snippet: Add" })
-	end,
 }

@@ -274,6 +274,53 @@ _   __            __   _
 			desc = "Grep in Files (same extension)",
 		},
 		{
+			"<leader>fd",
+			function()
+				Snacks.picker.grep({ dirs = { vim.fn.expand("%:p:h") } })
+			end,
+			desc = "Grep in current file's directory",
+		},
+		{
+			"<leader>fg",
+			function()
+				Snacks.input({ prompt = "Grep glob (e.g. *.ex): " }, function(glob)
+					if glob and glob ~= "" then
+						Snacks.picker.grep({ args = { "--glob=" .. glob } })
+					end
+				end)
+			end,
+			desc = "Grep with glob filter",
+		},
+		{
+			"<leader>fl",
+			function()
+				Snacks.picker.lines()
+			end,
+			desc = "Search lines in buffer",
+		},
+		{
+			"<leader>fb",
+			function()
+				Snacks.picker.grep_buffers()
+			end,
+			desc = "Grep in open buffers",
+		},
+		{
+			"<leader>fr",
+			function()
+				Snacks.picker.resume()
+			end,
+			desc = "Resume last picker",
+		},
+		{
+			"<C-/>",
+			function()
+				Snacks.terminal.toggle(nil, { win = { position = "bottom", height = 0.3 }, count = 999 })
+			end,
+			mode = { "n", "t" },
+			desc = "Toggle terminal",
+		},
+		{
 			"<leader>gf",
 			function()
 				Snacks.picker.git_branches()
