@@ -23,6 +23,27 @@ return {
 			end,
 			desc = "Diff: review changes",
 		},
+		{
+			"<leader>gD",
+			function()
+				-- Review the whole branch against its base (everything the LLM
+				-- built on this branch, not just uncommitted changes)
+				local base
+				for _, b in ipairs({ "origin/main", "origin/master", "main", "master" }) do
+					vim.fn.system("git rev-parse --verify " .. b)
+					if vim.v.shell_error == 0 then
+						base = b
+						break
+					end
+				end
+				if not base then
+					vim.notify("No main/master branch found", vim.log.levels.WARN)
+					return
+				end
+				vim.cmd("DiffviewOpen " .. base .. "...HEAD --imply-local")
+			end,
+			desc = "Diff: branch vs main",
+		},
 		{ "<leader>gh", "<cmd>DiffviewFileHistory %<cr>", desc = "Diff: file history" },
 		{ "<leader>gH", "<cmd>DiffviewFileHistory<cr>", desc = "Diff: repo history" },
 	},
