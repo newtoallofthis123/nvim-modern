@@ -26,4 +26,19 @@ return {
 			ui = { bar = { separator = "  ", extends = "…" } },
 		},
 	},
+	config = function(_, opts)
+		require("dropbar").setup(opts)
+
+		-- Transparent winbar (it otherwise inherits StatusLine's background)
+		local function transparent()
+			for _, g in ipairs({ "WinBar", "WinBarNC", "DropBarCurrentContext", "DropBarMenuCurrentContext" }) do
+				vim.api.nvim_set_hl(0, g, { bg = "NONE" })
+			end
+		end
+		transparent()
+		vim.api.nvim_create_autocmd("ColorScheme", {
+			group = vim.api.nvim_create_augroup("dropbar-transparent", { clear = true }),
+			callback = transparent,
+		})
+	end,
 }
