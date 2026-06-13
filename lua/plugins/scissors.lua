@@ -1,6 +1,10 @@
 return {
 	"chrisgrieser/nvim-scissors",
 	dependencies = "nvim-telescope/telescope.nvim",
+	keys = {
+		{ "<leader>se", desc = "Snippet: Edit" },
+		{ "<leader>sa", mode = { "n", "x" }, desc = "Snippet: Add" },
+	},
 	opts = {
 		snippetDir = vim.fn.stdpath("config") .. "/snippets",
 	},

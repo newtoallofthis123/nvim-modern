@@ -13,25 +13,27 @@ return {
 			edit_annotation = { key = "a", mode = { "n" } },
 		},
 	},
-	-- recommended keymaps, with a helpful prefix alias
-	init = function()
-		local haunt = require("haunt.api")
-		local haunt_picker = require("haunt.picker")
-		local map = vim.keymap.set
-		local prefix = "<leader>n"
-
-		-- annotations
-		map("n", prefix .. "a", function()
-			haunt.annotate()
-		end, { desc = "Annotate" })
-
-		map("n", prefix .. "t", function()
-			haunt.toggle_annotation()
-		end, { desc = "Toggle annotation" })
-
-		-- picker
-		map("n", prefix .. "l", function()
-			haunt_picker.show()
-		end, { desc = "Show Picker" })
-	end,
+	keys = {
+		{
+			"<leader>na",
+			function()
+				require("haunt.api").annotate()
+			end,
+			desc = "Haunt: annotate",
+		},
+		{
+			"<leader>nt",
+			function()
+				require("haunt.api").toggle_annotation()
+			end,
+			desc = "Haunt: toggle annotation",
+		},
+		{
+			"<leader>nl",
+			function()
+				require("haunt.picker").show()
+			end,
+			desc = "Haunt: show picker",
+		},
+	},
 }

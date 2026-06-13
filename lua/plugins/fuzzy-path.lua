@@ -1,6 +1,7 @@
 return {
 	-- dir = "/Users/noob/Projects/fuzzy_path",
 	"newtoallofthis123/blink-cmp-fuzzy-path",
+	lazy = true,
 	dependencies = { "saghen/blink.cmp" },
 	opts = {
 		filetypes = { "markdown", "json" },

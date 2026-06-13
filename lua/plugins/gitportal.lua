@@ -1,5 +1,10 @@
 return {
 	"trevorhauter/gitportal.nvim",
+	keys = {
+		{ "<leader>gO", mode = { "n", "v" }, desc = "GitPortal: open in browser" },
+		{ "<leader>gL", mode = { "n", "v" }, desc = "GitPortal: copy link" },
+		{ "<leader>ig", desc = "GitPortal: open from link" },
+	},
 	config = function()
 		local gitportal = require("gitportal")
 

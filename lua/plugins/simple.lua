@@ -1,8 +1,8 @@
 return {
-	{ "tpope/vim-sensible" },
 	{
 		"NvChad/nvim-colorizer.lua",
 		event = { "BufReadPre", "BufNewFile" },
+		opts = {},
 	},
 	{
 		"chrisgrieser/nvim-early-retirement",
@@ -11,9 +11,7 @@ return {
 	},
 	{
 		"tpope/vim-fugitive",
-	},
-	{
-		"xiyaowong/transparent.nvim",
+		cmd = { "Git", "G", "Gdiffsplit", "Gread", "Gwrite", "Gblame", "Glog", "GBrowse" },
 	},
 	{
 		"kylechui/nvim-surround",
@@ -28,5 +26,4 @@ return {
 		event = "InsertEnter",
 		config = true,
 	},
-	{ "mateuszwieloch/automkdir.nvim" },
 }
