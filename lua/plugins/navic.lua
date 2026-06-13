@@ -6,7 +6,8 @@ return {
 	opts = {
 		separator = " › ",
 		highlight = true,
-		depth_limit = 0,
+		depth_limit = 2,
+		depth_limit_indicator = "…",
 		lsp = { auto_attach = false },
 	},
 	config = function(_, opts)

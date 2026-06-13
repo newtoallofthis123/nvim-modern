@@ -64,7 +64,19 @@ return {
 				lualine_b = { mode },
 				lualine_c = {
 					{ "branch", icon = "", color = { fg = c.muted } },
-					{ "diagnostics" }, -- severity colors = meaningful
+					{
+						"diff",
+						symbols = { added = "+", modified = "~", removed = "-" },
+						diff_color = {
+							added = { fg = c.foam },
+							modified = { fg = c.gold },
+							removed = { fg = c.love },
+						},
+					},
+					{
+						"diagnostics",
+						symbols = { error = "● ", warn = "● ", info = "● ", hint = "● " },
+					},
 					{
 						function()
 							return require("nvim-navic").get_location()
