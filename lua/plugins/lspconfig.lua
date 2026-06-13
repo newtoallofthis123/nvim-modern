@@ -6,96 +6,92 @@ return {
 		"mason-org/mason.nvim",
 		"mason-org/mason-lspconfig.nvim",
 	},
-	opts = {
-		servers = {
-			lua_ls = {},
-		},
-	},
 	config = function()
 		local capabilities = require("blink.cmp").get_lsp_capabilities()
 		capabilities.general = capabilities.general or {}
 		capabilities.general.positionEncodings = { "utf-16" }
 
-		local opts = { silent = true }
+		-- Apply capabilities to every server we configure
+		vim.lsp.config("*", { capabilities = capabilities })
 
+		----------------------------------------------------------------------
+		-- Server settings
+		----------------------------------------------------------------------
 		vim.lsp.config.lua_ls = {
-			capabilities = capabilities,
 			settings = {
 				Lua = {
-					diagnostics = {
-						globals = { "vim" },
-					},
+					diagnostics = { globals = { "vim" } },
 					workspace = {
 						library = vim.api.nvim_get_runtime_file("", true),
 						checkThirdParty = false,
 					},
-					telemetry = {
-						enable = false,
-					},
+					telemetry = { enable = false },
 				},
 			},
 		}
 
-		vim.lsp.config.pyright = {
-			capabilities = capabilities,
-			settings = {
-				python = {
-					analysis = {
-						autoSearchPaths = true,
-						diagnosticMode = "workspace",
-						useLibraryCodeForTypes = true,
-					},
-				},
-			},
-		}
-
-		vim.lsp.config.ty = {
-			capabilities = capabilities,
-			settings = {},
-		}
+		vim.lsp.config.ty = {}
 
 		vim.lsp.config.ts_ls = {
-			capabilities = capabilities,
 			init_options = {
-				preferences = {
-					disableSuggestions = false,
-				},
+				preferences = { disableSuggestions = false },
 			},
 		}
 
-		vim.lsp.config.emmet_ls = {
-			capabilities = capabilities,
-		}
+		vim.lsp.config.emmet_ls = {}
+		vim.lsp.config.astro = {}
 
 		vim.lsp.config.rust_analyzer = {
-			capabilities = capabilities,
 			settings = {
 				["rust-analyzer"] = {
-					cargo = {
-						allFeatures = true,
-					},
-					checkOnSave = {
-						command = "clippy",
-					},
+					cargo = { allFeatures = true },
+					checkOnSave = { command = "clippy" },
 				},
 			},
-		}
-
-		vim.lsp.config.astro = {
-			capabilities = capabilities,
 		}
 
 		vim.lsp.config.gopls = {
-			capabilities = capabilities,
-			filetypes = { "go" },
+			filetypes = { "go", "gomod", "gowork", "gotmpl" },
+			settings = {
+				gopls = {
+					gofumpt = true,
+					hints = {
+						parameterNames = true,
+						assignVariableTypes = true,
+						rangeVariableTypes = true,
+					},
+				},
+			},
 		}
 
+		-- Elixir (Expert) — native arm64 via `brew install expert`.
 		vim.lsp.config("expert", {
-			cmd = { "/Users/noob/.bin/expert_darwin_amd64" },
+			cmd = { "expert", "--stdio" },
 			root_markers = { "mix.exs", ".git" },
 			filetypes = { "elixir", "eelixir", "heex" },
 		})
 
+		----------------------------------------------------------------------
+		-- Mason: keep installs in sync, but DON'T auto-enable every installed
+		-- server (that's what kept starting pyright/copilot). We enable
+		-- explicitly below.
+		----------------------------------------------------------------------
+		require("mason-lspconfig").setup({
+			ensure_installed = {
+				"lua_ls",
+				"ts_ls",
+				"emmet_ls",
+				"rust_analyzer",
+				"gopls",
+				"astro",
+			},
+			automatic_enable = false,
+		})
+
+		----------------------------------------------------------------------
+		-- Diagnostics — rendered once, cleanly (tiny-inline-diagnostic draws
+		-- the virtual text; we own signs + float here).
+		----------------------------------------------------------------------
 		vim.diagnostic.config({
 			virtual_text = false,
 			signs = {
@@ -108,10 +104,69 @@ return {
 			},
 			underline = true,
 			update_in_insert = false,
-			severity_sort = false,
+			severity_sort = true,
+			float = { border = "rounded", source = true },
 		})
 
-		-- Enable all configured LSP servers
+		----------------------------------------------------------------------
+		-- Discoverable keymaps — set per-buffer when a server attaches.
+		-- which-key surfaces these so you actually learn them.
+		----------------------------------------------------------------------
+		vim.api.nvim_create_autocmd("LspAttach", {
+			group = vim.api.nvim_create_augroup("noob-lsp-attach", { clear = true }),
+			callback = function(ev)
+				local buf = ev.buf
+				local function map(keys, fn, desc, mode)
+					vim.keymap.set(mode or "n", keys, fn, { buffer = buf, desc = "LSP: " .. desc })
+				end
+
+				-- Navigation (Snacks pickers — consistent with your gd)
+				map("grr", function()
+					Snacks.picker.lsp_references()
+				end, "References")
+				map("gri", function()
+					Snacks.picker.lsp_implementations()
+				end, "Implementations")
+				map("grt", function()
+					Snacks.picker.lsp_type_definitions()
+				end, "Type definition")
+
+				-- Actions
+				map("grn", vim.lsp.buf.rename, "Rename")
+				map("gra", vim.lsp.buf.code_action, "Code action", { "n", "x" })
+				map("K", function()
+					vim.lsp.buf.hover({ border = "rounded" })
+				end, "Hover")
+				map("<C-k>", function()
+					vim.lsp.buf.signature_help({ border = "rounded" })
+				end, "Signature help", "i")
+
+				-- <leader>l group (mirrors the above so it shows in which-key)
+				map("<leader>lr", vim.lsp.buf.rename, "Rename")
+				map("<leader>la", vim.lsp.buf.code_action, "Code action", { "n", "x" })
+				map("<leader>lR", function()
+					Snacks.picker.lsp_references()
+				end, "References")
+				map("<leader>ls", function()
+					Snacks.picker.lsp_symbols()
+				end, "Document symbols")
+				map("<leader>lS", function()
+					Snacks.picker.lsp_workspace_symbols()
+				end, "Workspace symbols")
+
+				-- Inlay hints toggle (off by default)
+				local client = vim.lsp.get_client_by_id(ev.data.client_id)
+				if client and client:supports_method("textDocument/inlayHint") then
+					map("<leader>lh", function()
+						vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled({ bufnr = buf }), { bufnr = buf })
+					end, "Toggle inlay hints")
+				end
+			end,
+		})
+
+		----------------------------------------------------------------------
+		-- Enable exactly the servers we want.
+		----------------------------------------------------------------------
 		vim.lsp.enable({
 			"lua_ls",
 			"ts_ls",
