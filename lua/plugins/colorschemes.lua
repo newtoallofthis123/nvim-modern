@@ -20,6 +20,11 @@ return {
 					PmenuThumb = { bg = "NONE" },
 					BlinkCmpMenu = { bg = "NONE" },
 
+					-- Transparent cursorline: no full-width bar, just a bright
+					-- line number to mark where you are
+					CursorLine = { bg = "NONE" },
+					CursorLineNr = { fg = "gold", bold = true },
+
 					-- For good search highlights
 					CurSearch = { fg = "base", bg = "leaf", inherit = false },
 					Search = { fg = "text", bg = "leaf", blend = 20, inherit = false },
