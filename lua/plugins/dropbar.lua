@@ -1,6 +1,9 @@
 -- Winbar breadcrumb: dimmed path + bright filename + LSP symbol trail.
--- Answers "where am I" at a glance. Zero-dependency, native LSP + treesitter.
+-- DISABLED experiment: symbols moved to the statusline via nvim-navic to
+-- declutter the top (tabline + winbar felt crowded). Flip enabled=true to
+-- bring the winbar back.
 return {
+	enabled = false,
 	"Bekaboo/dropbar.nvim",
 	event = { "BufReadPost", "BufNewFile" },
 	keys = {

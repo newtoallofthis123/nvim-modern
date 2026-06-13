@@ -154,8 +154,14 @@ return {
 					Snacks.picker.lsp_workspace_symbols()
 				end, "Workspace symbols")
 
-				-- Inlay hints toggle (off by default)
 				local client = vim.lsp.get_client_by_id(ev.data.client_id)
+
+				-- LSP symbol breadcrumb in the statusline (via navic)
+				if client and client:supports_method("textDocument/documentSymbol") then
+					require("nvim-navic").attach(client, buf)
+				end
+
+				-- Inlay hints toggle (off by default)
 				if client and client:supports_method("textDocument/inlayHint") then
 					map("<leader>lh", function()
 						vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled({ bufnr = buf }), { bufnr = buf })
