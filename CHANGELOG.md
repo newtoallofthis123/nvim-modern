@@ -100,6 +100,16 @@ One key, no picker, jump to the *other* one:
 - 0.12 whimsy: a line flash on `MarkSet`; tmux pane border glows gold while
   an LSP is indexing
 
+## Quickfix (`lua/custom/quickfix.lua`)
+
+The quickfix is the connective tissue (server errors, `cr` sweep, conflicts,
+diagnostics all feed it). quicker.nvim owns display + `<leader>qq` toggle; this
+adds the picker-free ways to fill & walk it:
+
+- `<leader>*` — grep the word under the cursor (or selection) → quickfix, via
+  ripgrep, no picker; auto-opens when filled
+- `]q` / `[q` — next/prev, centered + wrapping · `]Q` / `[Q` last / first
+
 ## Markdown / prose layer (`after/ftplugin/markdown.lua`)
 
 For writing tickets & plans:
@@ -110,6 +120,7 @@ For writing tickets & plans:
 - `j`/`k` move by visual line when wrapped, but a count moves real lines
 - Emphasis (visual): `\b` bold · `\i` italic · `\c` code · `\s` strike
 - `\=` / `\-` promote / demote the heading on the current line
+- `]]` / `[[` jump between headings; `\o` dumps an outline to the loclist
 
 ## Custom tools — the cockpit bridge
 

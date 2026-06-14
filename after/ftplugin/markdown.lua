@@ -32,3 +32,31 @@ end, { buffer = true, desc = "MD heading deeper" })
 map("n", "<localleader>-", function()
 	heading(-1)
 end, { buffer = true, desc = "MD heading shallower" })
+
+-- navigate a long plan/ticket: jump between headings, centered
+local function goto_heading(flags)
+	return function()
+		vim.fn.search([[^#\+\s]], flags)
+		vim.cmd("normal! zz")
+	end
+end
+map({ "n", "x" }, "]]", goto_heading("W"), { buffer = true, desc = "Next heading" })
+map({ "n", "x" }, "[[", goto_heading("bW"), { buffer = true, desc = "Prev heading" })
+
+-- outline: every heading → location list (indented by depth), jump from there
+map("n", "<localleader>o", function()
+	local buf = vim.api.nvim_get_current_buf()
+	local items = {}
+	for lnum, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+		local hashes, text = line:match("^(#+)%s+(.+)")
+		if hashes then
+			items[#items + 1] = { bufnr = buf, lnum = lnum, text = string.rep("  ", #hashes - 1) .. text }
+		end
+	end
+	if #items == 0 then
+		vim.notify("no headings")
+		return
+	end
+	vim.fn.setloclist(0, {}, " ", { title = "Outline", items = items })
+	vim.cmd("lopen")
+end, { buffer = true, desc = "MD outline → loclist" })
