@@ -21,7 +21,10 @@ return {
 			javascriptreact = { "oxfmt" },
 			typescriptreact = { "oxfmt" },
 			go = { "goimports", "gofmt" },
-			elixir = { "mix" },
+			-- elixir: NOT here on purpose. Dexter formats .ex/.exs/.heex on save
+			-- via the LSP's willSaveWaitUntil hook (using your .formatter.exs +
+			-- Styler/HTMLFormatter plugins). Listing `mix` here would double up
+			-- and fight Dexter on every save. Just `:w` — Dexter formats.
 			sh = { "shfmt" },
 		},
 		default_format_opts = {

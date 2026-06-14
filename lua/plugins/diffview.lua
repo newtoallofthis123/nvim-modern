@@ -49,6 +49,16 @@ return {
 	},
 	opts = {
 		enhanced_diff_hl = true,
+		-- Soft-wrap inside every diff window (long agent-written lines stay on
+		-- screen instead of scrolling off the right edge). linebreak/breakindent
+		-- keep the wrap tidy and aligned.
+		hooks = {
+			diff_buf_win_enter = function(_, winid)
+				vim.wo[winid].wrap = true
+				vim.wo[winid].linebreak = true
+				vim.wo[winid].breakindent = true
+			end,
+		},
 		view = {
 			default = { winbar_info = true },
 			merge_tool = { layout = "diff3_mixed" },
