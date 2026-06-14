@@ -114,7 +114,6 @@ adds the picker-free ways to fill & walk it:
 
 For writing tickets & plans:
 
-- Spell on for markdown/gitcommit/text (`]s`/`[s`, `z=`, `zg`)
 - Soft wrap + linebreak + breakindent; `formatoptions -t` (no auto hard-wrap;
   `gq` still reflows to textwidth — md 80, commits 72)
 - `j`/`k` move by visual line when wrapped, but a count moves real lines
