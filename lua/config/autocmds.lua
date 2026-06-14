@@ -134,6 +134,7 @@ vim.api.nvim_create_autocmd("FileType", {
 	pattern = { "markdown", "gitcommit", "text" },
 	callback = function(ev)
 		vim.opt_local.textwidth = ev.match == "gitcommit" and 72 or 80
+		vim.opt_local.spell = true -- ]s [s jump · z= fix · zg add to dictionary
 	end,
 })
 
