@@ -149,3 +149,23 @@ vim.api.nvim_create_autocmd("MarkSet", {
 		vim.hl.range(0, mark_ns, "Visual", { row, 0 }, { row, -1 }, { timeout = 200 })
 	end,
 })
+
+-- Publish nvim's RPC socket to its tmux WINDOW so sibling panes can drive it
+-- (the agent / a just recipe / scripts can `nvim --server "$NVIM" --remote …`).
+-- A zsh precmd exports $NVIM from this @nvim option. Window-scoped: each window
+-- advertises its own nvim. Cleared on exit.
+if vim.env.TMUX then
+	local grp = vim.api.nvim_create_augroup("nvim_socket_publish", { clear = true })
+	vim.api.nvim_create_autocmd("VimEnter", {
+		group = grp,
+		callback = function()
+			vim.system({ "tmux", "set-option", "-w", "@nvim", vim.v.servername })
+		end,
+	})
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = grp,
+		callback = function()
+			vim.system({ "tmux", "set-option", "-uw", "@nvim" })
+		end,
+	})
+end

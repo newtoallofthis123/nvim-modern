@@ -152,6 +152,14 @@ pick one, and `just <recipe>` is sent there.
 - `jl` float the pane's logs · `je` scan pane output for `file:line` → quickfix
 - `jp` (re)pick the target pane
 
+### nvim socket → tmux (the inbound channel)
+On `VimEnter` (in tmux) nvim tags its **window** with its RPC socket
+(`@nvim <servername>`, cleared on exit); a zsh precmd
+(`~/.config/zsh/nvim-socket.zsh`) exports `$NVIM` in every pane of that window.
+So the agent / a `just` recipe / any script can drive the reviewer:
+`nvim --server "$NVIM" --remote-send '<cmd>edit foo.rs<CR>'`. Window-scoped, so
+each window talks to its own nvim.
+
 ## The look — "quiet word"
 
 - **rose-pine** only, **transparent** (via transparent.nvim + `extra_groups`)
