@@ -116,20 +116,25 @@ function M.open_ticket(name)
 	if not b then
 		return
 	end
+	-- already open in a window (any tab)? jump to it.
 	if b.bufnr and vim.api.nvim_buf_is_valid(b.bufnr) then
-		local win = vim.fn.bufwinid(b.bufnr)
-		if win ~= -1 then
-			vim.api.nvim_set_current_win(win)
-		else
-			vim.cmd("buffer " .. b.bufnr)
+		for _, win in ipairs(vim.api.nvim_list_wins()) do
+			if vim.api.nvim_win_get_buf(win) == b.bufnr then
+				vim.api.nvim_set_current_win(win)
+				return
+			end
 		end
-	else
-		vim.cmd("enew")
-		local buf = vim.api.nvim_get_current_buf()
-		pcall(vim.api.nvim_buf_set_name, buf, b.ticket)
-		vim.bo.filetype = "markdown"
-		b.bufnr = buf
+		-- exists but hidden → bring it up in a new tab
+		vim.cmd("tabnew")
+		vim.cmd("buffer " .. b.bufnr)
+		return
 	end
+	-- fresh ticket → new tab
+	vim.cmd("tabnew")
+	local buf = vim.api.nvim_get_current_buf()
+	pcall(vim.api.nvim_buf_set_name, buf, b.ticket)
+	vim.bo.filetype = "markdown"
+	b.bufnr = buf
 end
 
 -- <leader>sn : name → new ticket+bucket, opens the ticket
@@ -177,6 +182,7 @@ function M.enter_bucket()
 			M.new_ticket()
 		else
 			M.set_active(it.name)
+			M.open_ticket(it.name)
 			vim.notify("🪣 " .. it.name)
 		end
 	end)
@@ -376,16 +382,18 @@ end
 -- setup ---------------------------------------------------------------------
 function M.setup()
 	local map = vim.keymap.set
-	map("n", "<leader>sn", M.new_ticket, { desc = "Satchel: new ticket+bucket" })
-	map("n", "<leader>se", M.enter_bucket, { desc = "Satchel: enter ticket" })
-	map("n", "<leader>sx", M.leave_bucket, { desc = "Satchel: leave ticket" })
+	local nx = { "n", "x" }
+	map(nx, "<leader>sn", M.new_ticket, { desc = "Satchel: new ticket+bucket" })
+	map(nx, "<leader>se", M.enter_bucket, { desc = "Satchel: enter ticket" })
+	map(nx, "<leader>sx", M.leave_bucket, { desc = "Satchel: leave ticket" })
+	-- toss is the one that differs by mode: file in normal, selection in visual
 	map("n", "<leader>st", M.toss_file, { desc = "Satchel: toss current file" })
 	map("x", "<leader>st", M.toss_selection, { desc = "Satchel: toss selection" })
-	map("n", "<leader>sf", M.insert_file_ref, { desc = "Satchel: insert file ref" })
-	map("n", "<leader>sd", M.drop, { desc = "Satchel: drop refs (pick)" })
-	map("n", "<leader>sD", M.dump, { desc = "Satchel: dump at cursor" })
-	map("n", "<leader>sg", M.go_dump, { desc = "Satchel: go to ticket + dump" })
-	map("n", "<leader>ss", M.manage, { desc = "Satchel: manage ticket" })
+	map(nx, "<leader>sf", M.insert_file_ref, { desc = "Satchel: insert file ref" })
+	map(nx, "<leader>sd", M.drop, { desc = "Satchel: drop refs (pick)" })
+	map(nx, "<leader>sD", M.dump, { desc = "Satchel: dump at cursor" })
+	map(nx, "<leader>sg", M.go_dump, { desc = "Satchel: go to ticket + dump" })
+	map(nx, "<leader>ss", M.manage, { desc = "Satchel: manage ticket" })
 end
 
 M.setup()
