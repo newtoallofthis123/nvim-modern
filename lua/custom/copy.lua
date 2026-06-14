@@ -1,6 +1,6 @@
 local M = {}
 
-local function get_relative_filepath()
+function M.get_relative_filepath()
 	local filepath = vim.fn.expand("%:p")
 	local cwd = vim.fn.getcwd()
 
@@ -13,7 +13,7 @@ local function get_relative_filepath()
 	return relative_path
 end
 
-local function get_current_line_or_range()
+function M.get_current_line_or_range()
 	local mode = vim.fn.mode()
 	if mode == "v" or mode == "V" or mode == "\22" then -- visual modes
 		local start_line = vim.fn.line("'<")
@@ -29,7 +29,7 @@ local function get_current_line_or_range()
 end
 
 local function get_formatted_buffer_path()
-	local relative_path = get_relative_filepath()
+	local relative_path = M.get_relative_filepath()
 	if relative_path == "[No Name]" then
 		return "@[No Name]"
 	end
@@ -37,8 +37,8 @@ local function get_formatted_buffer_path()
 end
 
 local function get_formatted_buffer_path_with_line()
-	local relative_path = get_relative_filepath()
-	local line_info = get_current_line_or_range()
+	local relative_path = M.get_relative_filepath()
+	local line_info = M.get_current_line_or_range()
 	if relative_path == "[No Name]" then
 		return "@[No Name]#" .. line_info
 	end

@@ -131,3 +131,59 @@ map("n", "<leader>ns", function()
 		pcall(vim.api.nvim_buf_set_name, scratch_buf, "scratch")
 	end
 end, { desc = "Scratch pad (toggle)" })
+
+----------------------------------------------------------------------
+-- Markdown checkbox toggle — tear through an AI's task list.
+--   - [ ] todo   <leader>cc ->   - [x] todo   (and back)
+--   plain list item gains a [ ]; works over a visual range too.
+----------------------------------------------------------------------
+local function toggle_checkbox(line)
+	if line:match("%[ %]") then
+		return (line:gsub("%[ %]", "[x]", 1))
+	elseif line:match("%[[xX]%]") then
+		return (line:gsub("%[[xX]%]", "[ ]", 1))
+	end
+	local added = line:gsub("^(%s*[-*+]%s+)", "%1[ ] ", 1)
+	if added ~= line then
+		return added
+	end
+	return (line:gsub("^(%s*)", "%1- [ ] ", 1))
+end
+map("n", "<leader>cc", function()
+	vim.api.nvim_set_current_line(toggle_checkbox(vim.api.nvim_get_current_line()))
+end, { desc = "Toggle markdown checkbox" })
+map("x", "<leader>cc", function()
+	local s, e = vim.fn.line("v"), vim.fn.line(".")
+	if s > e then
+		s, e = e, s
+	end
+	local lines = vim.api.nvim_buf_get_lines(0, s - 1, e, false)
+	for i, l in ipairs(lines) do
+		lines[i] = toggle_checkbox(l)
+	end
+	vim.api.nvim_buf_set_lines(0, s - 1, e, false, lines)
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+end, { desc = "Toggle markdown checkboxes" })
+
+----------------------------------------------------------------------
+-- Copy selection as a fenced code block (with the source filetype tag),
+-- straight to the clipboard — ready to drop into a ticket / PR / the LLM.
+-- Does NOT touch the buffer.
+----------------------------------------------------------------------
+map("x", "<leader>cb", function()
+	local s, e = vim.fn.line("v"), vim.fn.line(".")
+	if s > e then
+		s, e = e, s
+	end
+	local lines = vim.api.nvim_buf_get_lines(0, s - 1, e, false)
+	local block = "```" .. vim.bo.filetype .. "\n" .. table.concat(lines, "\n") .. "\n```"
+	vim.fn.setreg("+", block)
+	vim.notify("Copied " .. (e - s + 1) .. " lines as a code block")
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+end, { desc = "Copy selection as fenced code block" })
+
+----------------------------------------------------------------------
+-- Follow a `path:line` token under the cursor (native gF) and center it.
+-- Land on src/foo.rs:42 in a plan, press gF, you're there.
+----------------------------------------------------------------------
+map("n", "gF", "gFzz", { desc = "Open file:line under cursor (centered)" })
