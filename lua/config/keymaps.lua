@@ -14,6 +14,11 @@ keymap.set("n", "<C-u>", "<C-u>zz", { noremap = true })
 
 keymap.set("n", "<leader>ra", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
 
+-- Change the word under the cursor, then press `.` to repeat that same change
+-- on the next match (and the next…). Surgical replace without :%s.
+keymap.set("n", "<leader>cn", "*``cgn", { desc = "Change word → next match (dot-repeat)" })
+keymap.set("n", "<leader>cN", "*``cgN", { desc = "Change word → prev match (dot-repeat)" })
+
 keymap.set("n", "<leader>bn", ":bn<CR>", { noremap = true })
 keymap.set("n", "<leader>bp", ":bp<CR>", { noremap = true })
 keymap.set("n", "<leader>bb", ":ls<CR>:b ", { noremap = true, desc = "List buffers and switch" })

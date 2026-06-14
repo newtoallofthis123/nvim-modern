@@ -161,6 +161,14 @@ return {
 					require("nvim-navic").attach(client, buf)
 				end
 
+				-- Native LSP folding (0.11+) for servers that return folding
+				-- ranges — semantically richer than treesitter folds, which
+				-- remain the fallback everywhere else (see options.lua).
+				if client and client:supports_method("textDocument/foldingRange") then
+					local win = vim.api.nvim_get_current_win()
+					vim.wo[win][0].foldexpr = "v:lua.vim.lsp.foldexpr()"
+				end
+
 				-- Inlay hints toggle (off by default)
 				if client and client:supports_method("textDocument/inlayHint") then
 					map("<leader>lh", function()

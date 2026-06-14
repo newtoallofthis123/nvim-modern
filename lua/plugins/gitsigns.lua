@@ -12,13 +12,20 @@ return {
 					vim.keymap.set(mode, l, r, opts)
 				end
 
+				local function center()
+					vim.schedule(function()
+						vim.cmd("normal! zz")
+					end)
+				end
+
 				map("n", "]c", function()
 					if vim.wo.diff then
 						vim.cmd.normal({ "]c", bang = true })
 					else
 						gitsigns.nav_hunk("next")
 					end
-				end, { desc = "Next hunk" })
+					center()
+				end, { desc = "Next hunk (centered)" })
 
 				map("n", "[c", function()
 					if vim.wo.diff then
@@ -26,7 +33,8 @@ return {
 					else
 						gitsigns.nav_hunk("prev")
 					end
-				end, { desc = "Previous hunk" })
+					center()
+				end, { desc = "Previous hunk (centered)" })
 
 				map("n", "<leader>hs", gitsigns.stage_hunk, { desc = "Stage hunk" })
 				map("n", "<leader>hr", gitsigns.reset_hunk, { desc = "Reset hunk" })

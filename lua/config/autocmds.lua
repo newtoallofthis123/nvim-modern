@@ -55,29 +55,55 @@ vim.api.nvim_create_autocmd("BufRead", {
 	end,
 })
 
--- show cursorline only in active window enable
+-- show cursorline only in the active window (the "you are here" marker)
+local active_cursorline = vim.api.nvim_create_augroup("active_cursorline", { clear = true })
 vim.api.nvim_create_autocmd({ "WinEnter", "BufEnter" }, {
-	group = vim.api.nvim_create_augroup("active_cursorline", { clear = true }),
+	group = active_cursorline,
 	callback = function()
-		vim.opt_local.cursorline = true
+		vim.wo.cursorline = true
 	end,
 })
---
--- vim.api.nvim_create_autocmd("LspProgress", {
---     callback = function(ev)
---         local value = ev.data.params.value or {}
---         if not value.kind then return end
---
---         local status = value.kind == "end" and 0 or 1
---         local percent = value.percentage or 0
---
---         local osc_seq = string.format("\27]9;4;%d;%d\a", status, percent)
---
---         if os.getenv("TMUX") then
---             osc_seq = string.format("\27Ptmux;\27%s\27\\", osc_seq)
---         end
---
---         io.stdout:write(osc_seq)
---         io.stdout:flush()
---     end,
--- })
+vim.api.nvim_create_autocmd("WinLeave", {
+	group = active_cursorline,
+	callback = function()
+		vim.wo.cursorline = false
+	end,
+})
+
+-- LSP indexing pulse → tmux pane border. While any language server is busy
+-- (begin..end progress) the active pane border glows gold, then resets the
+-- moment all servers go idle. Your editor talking to your multiplexer.
+if vim.env.TMUX then
+	local pulse = vim.api.nvim_create_augroup("tmux_lsp_pulse", { clear = true })
+	-- Remember the theme's own border colour so we restore it, not "default".
+	local rest = vim.fn.system({ "tmux", "show-options", "-wv", "pane-active-border-style" })
+	rest = (rest:gsub("%s+$", ""))
+	if rest == "" then
+		rest = "default"
+	end
+	local active = 0
+	local function border(on)
+		vim.system({ "tmux", "set", "-w", "pane-active-border-style", on and "fg=#f6c177" or rest })
+	end
+	vim.api.nvim_create_autocmd("LspProgress", {
+		group = pulse,
+		callback = function(ev)
+			local kind = vim.tbl_get(ev, "data", "params", "value", "kind")
+			if kind == "begin" then
+				active = active + 1
+				border(true)
+			elseif kind == "end" then
+				active = math.max(0, active - 1)
+				if active == 0 then
+					border(false)
+				end
+			end
+		end,
+	})
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = pulse,
+		callback = function()
+			border(false)
+		end,
+	})
+end
