@@ -21,10 +21,12 @@ end
 -- tmux primitives -----------------------------------------------------------
 local function list_panes()
 	local self_pane = vim.env.TMUX_PANE
+	-- only panes in nvim's OWN window (not the whole session)
 	local out = vim.fn.systemlist({
 		"tmux",
 		"list-panes",
-		"-a",
+		"-t",
+		self_pane or "",
 		"-F",
 		"#{pane_id}\t#{session_name}:#{window_index}.#{pane_index}\t#{pane_current_command}\t#{pane_current_path}",
 	})
