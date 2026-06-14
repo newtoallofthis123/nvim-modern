@@ -128,6 +128,15 @@ vim.api.nvim_create_autocmd("FileChangedShellPost", {
 	end,
 })
 
+-- Reflow width for prose so gq / gw wrap cleanly: markdown 80, commits 72
+vim.api.nvim_create_autocmd("FileType", {
+	group = vim.api.nvim_create_augroup("prose_textwidth", { clear = true }),
+	pattern = { "markdown", "gitcommit", "text" },
+	callback = function(ev)
+		vim.opt_local.textwidth = ev.match == "gitcommit" and 72 or 80
+	end,
+})
+
 -- Flash the line when you drop a named mark (0.12 MarkSet event)
 local mark_ns = vim.api.nvim_create_namespace("mark_flash")
 vim.api.nvim_create_autocmd("MarkSet", {

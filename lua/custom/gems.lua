@@ -187,3 +187,34 @@ end, { desc = "Copy selection as fenced code block" })
 -- Land on src/foo.rs:42 in a plan, press gF, you're there.
 ----------------------------------------------------------------------
 map("n", "gF", "gFzz", { desc = "Open file:line under cursor (centered)" })
+
+----------------------------------------------------------------------
+-- Add a blank line below / above without leaving normal mode or moving.
+----------------------------------------------------------------------
+map("n", "]<Space>", function()
+	local r = vim.api.nvim_win_get_cursor(0)[1]
+	vim.api.nvim_buf_set_lines(0, r, r, false, { "" })
+end, { desc = "Blank line below" })
+map("n", "[<Space>", function()
+	local pos = vim.api.nvim_win_get_cursor(0)
+	vim.api.nvim_buf_set_lines(0, pos[1] - 1, pos[1] - 1, false, { "" })
+	vim.api.nvim_win_set_cursor(0, { pos[1] + 1, pos[2] })
+end, { desc = "Blank line above" })
+
+----------------------------------------------------------------------
+-- Sweep a substitution across every file in the quickfix list.
+-- Populate the quickfix first (grep / LSP references), then <leader>cr.
+-- The AI renamed something repo-wide and missed spots — this finishes it.
+----------------------------------------------------------------------
+map("n", "<leader>cr", function()
+	if vim.fn.getqflist({ size = 0 }).size == 0 then
+		vim.notify("Quickfix is empty — grep or find references first", vim.log.levels.WARN)
+		return
+	end
+	local pat = vim.fn.input("Sweep quickfix files — pattern: ")
+	if pat == "" then
+		return
+	end
+	local rep = vim.fn.input("Replace with: ")
+	vim.cmd(("cfdo %%s/%s/%s/ge | update"):format(pat, rep))
+end, { desc = "Substitute across quickfix files" })
