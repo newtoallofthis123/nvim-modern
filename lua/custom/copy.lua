@@ -13,7 +13,8 @@ function M.get_relative_filepath()
 	return relative_path
 end
 
-function M.get_current_line_or_range()
+-- Numeric line range of the cursor (normal) or live selection (visual).
+function M.get_line_range()
 	local mode = vim.fn.mode()
 	if mode == "v" or mode == "V" or mode == "\22" then -- visual modes
 		-- Read the live selection: "v" is the anchor, "." is the cursor.
@@ -24,14 +25,18 @@ function M.get_current_line_or_range()
 		if start_line > end_line then
 			start_line, end_line = end_line, start_line
 		end
-		if start_line == end_line then
-			return tostring(start_line)
-		else
-			return start_line .. "-" .. end_line
-		end
-	else
-		return tostring(vim.fn.line("."))
+		return start_line, end_line
 	end
+	local cur = vim.fn.line(".")
+	return cur, cur
+end
+
+function M.get_current_line_or_range()
+	local start_line, end_line = M.get_line_range()
+	if start_line == end_line then
+		return tostring(start_line)
+	end
+	return start_line .. "-" .. end_line
 end
 
 local function get_formatted_buffer_path()

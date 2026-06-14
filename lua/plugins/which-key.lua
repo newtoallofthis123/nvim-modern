@@ -4,6 +4,7 @@ return {
 	opts = {
 		preset = "helix",
 		spec = {
+			{ "<leader>a", group = "agent (claude/codex)" },
 			{ "<leader>b", group = "buffer" },
 			{ "<leader>c", group = "copy context (LLM)" },
 			{ "<leader>f", group = "find / search" },
@@ -19,6 +20,7 @@ return {
 			{ "<leader>x", group = "tools" },
 			{ "<leader>z", group = "harpoon nav" },
 			{ "<leader>r", group = "refactor" },
+			{ "<leader>s", group = "satchel" },
 		},
 	},
 	keys = {

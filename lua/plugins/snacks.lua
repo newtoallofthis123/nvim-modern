@@ -368,7 +368,7 @@ _   __            __   _
 			desc = "Search History",
 		},
 		{
-			"<leader>s",
+			"<leader>sp",
 			function()
 				Snacks.picker.spelling()
 			end,
