@@ -10,13 +10,13 @@
 --    literal text without triggering it.
 --  * claude understands `@file#line` / `@file#10-20`. codex has no line
 --    syntax on input, so the line is appended as prose: `@file (line 42)`.
+--  * Sessions are detected via the tmux `@app` pane option (set to "claude" /
+--    "codex"), not `pane_current_command` -- the latter shows "node" when the
+--    agent runs via the npm wrapper, `@app` is explicit and reliable.
 
 local M = {}
 
 local copy = require("custom.copy")
-
--- Agents we know how to talk to, keyed by tmux `pane_current_command`.
-local AGENTS = { claude = true, codex = true }
 
 local function notify(msg, level)
 	vim.notify(msg, level or vim.log.levels.INFO, { title = "AgentSend" })
@@ -32,14 +32,18 @@ local function format_ref(agent, path, line)
 	return string.format("@%s#%s ", path, line)
 end
 
--- List agent panes in the current tmux window, excluding our own pane.
+-- List every pane that has an `@app` set (across all windows/sessions),
+-- excluding our own pane.
 local function list_agent_panes()
 	local self_pane = vim.env.TMUX_PANE
 	local out = vim.fn.systemlist({
 		"tmux",
 		"list-panes",
+		"-a",
 		"-F",
-		"#{pane_id}\t#{pane_current_command}\t#{pane_current_path}\t#{pane_title}",
+		"#{@app}\t#{pane_id}\t#{session_name}:#{window_index}\t#{pane_current_path}",
+		"-f",
+		"#{!=:#{@app},}",
 	})
 	if vim.v.shell_error ~= 0 then
 		return nil
@@ -48,9 +52,9 @@ local function list_agent_panes()
 	local panes = {}
 	for _, l in ipairs(out) do
 		local parts = vim.split(l, "\t", { plain = true })
-		local id, cmd, path, title = parts[1], parts[2], parts[3], parts[4]
-		if id and AGENTS[cmd] and id ~= self_pane then
-			table.insert(panes, { id = id, cmd = cmd, path = path, title = title or "" })
+		local app, id, win, path = parts[1], parts[2], parts[3], parts[4]
+		if id and app and app ~= "" and id ~= self_pane then
+			table.insert(panes, { app = app, id = id, win = win or "", path = path })
 		end
 	end
 	return panes
@@ -68,14 +72,14 @@ end
 
 -- Paste text into a pane as a bracketed paste (won't trigger the @ picker).
 local function inject(pane, path, line)
-	local text = format_ref(pane.cmd, path, line)
+	local text = format_ref(pane.app, path, line)
 	vim.fn.system({ "tmux", "set-buffer", "-b", "nvim-agentref", "--", text })
 	vim.fn.system({ "tmux", "paste-buffer", "-p", "-d", "-b", "nvim-agentref", "-t", pane.id })
 	if vim.v.shell_error ~= 0 then
-		notify("Failed to paste into " .. pane.cmd, vim.log.levels.ERROR)
+		notify("Failed to paste into " .. pane.app, vim.log.levels.ERROR)
 		return
 	end
-	notify(string.format("Sent %sto %s [%s]", text, pane.cmd, pane.id))
+	notify(string.format("Sent %sto %s [%s]", text, pane.app, pane.win))
 end
 
 function M.send()
@@ -98,7 +102,7 @@ function M.send()
 		return
 	end
 	if #panes == 0 then
-		notify("No claude/codex session in this window", vim.log.levels.WARN)
+		notify("No tagged agent session (@app) found", vim.log.levels.WARN)
 		return
 	end
 
@@ -113,7 +117,7 @@ function M.send()
 	picker(panes, {
 		prompt = "Send ref to which session?",
 		format_item = function(p)
-			return string.format("%s  %s", p.cmd, vim.fn.fnamemodify(p.path, ":~"))
+			return string.format("%s  %s  %s", p.app, p.win, vim.fn.fnamemodify(p.path, ":~"))
 		end,
 	}, function(choice)
 		if choice then

@@ -85,6 +85,27 @@ return {
 							return package.loaded["nvim-navic"] and require("nvim-navic").is_available()
 						end,
 					},
+					-- satchel: which context bucket is active (name muted, count gold)
+					{
+						function()
+							return require("custom.satchel").label()
+						end,
+						cond = function()
+							return package.loaded["custom.satchel"] and require("custom.satchel").is_active()
+						end,
+						color = { fg = c.muted },
+						padding = { left = 1, right = 0 },
+					},
+					{
+						function()
+							return require("custom.satchel").count()
+						end,
+						cond = function()
+							return package.loaded["custom.satchel"] and require("custom.satchel").is_active()
+						end,
+						color = { fg = c.gold },
+						padding = { left = 0, right = 1 },
+					},
 				},
 				lualine_x = {
 					{ "searchcount", maxcount = 999, color = { fg = c.gold } },

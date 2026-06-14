@@ -16,8 +16,14 @@ end
 function M.get_current_line_or_range()
 	local mode = vim.fn.mode()
 	if mode == "v" or mode == "V" or mode == "\22" then -- visual modes
-		local start_line = vim.fn.line("'<")
-		local end_line = vim.fn.line("'>")
+		-- Read the live selection: "v" is the anchor, "." is the cursor.
+		-- The '< / '> marks are only set on leaving visual mode, so they're
+		-- stale (0) while a visual-mode mapping is running.
+		local start_line = vim.fn.line("v")
+		local end_line = vim.fn.line(".")
+		if start_line > end_line then
+			start_line, end_line = end_line, start_line
+		end
 		if start_line == end_line then
 			return tostring(start_line)
 		else
