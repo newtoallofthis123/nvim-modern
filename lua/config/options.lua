@@ -67,6 +67,10 @@ vim.opt.splitkeep = "screen" -- opening a split stops yanking the text around
 -- Live substitution preview in a split as you type the replacement.
 vim.opt.inccommand = "split"
 
+-- Snappier idle (CursorHold): symbol-glow appears fast, auto-reload checks
+-- the disk soon after you stop moving.
+vim.opt.updatetime = 250
+
 -- Always reserve the sign column so diagnostics don't shove text sideways.
 vim.opt.signcolumn = "yes"
 

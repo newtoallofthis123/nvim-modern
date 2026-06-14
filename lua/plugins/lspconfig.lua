@@ -14,6 +14,16 @@ return {
 		-- Apply capabilities to every server we configure
 		vim.lsp.config("*", { capabilities = capabilities })
 
+		-- Symbol-under-cursor glow: a hairline underline, no fill (best on a
+		-- transparent bg). Reapplied if the colorscheme changes.
+		local function doc_hl_style()
+			for _, g in ipairs({ "LspReferenceText", "LspReferenceRead", "LspReferenceWrite" }) do
+				vim.api.nvim_set_hl(0, g, { underline = true, bg = "NONE" })
+			end
+		end
+		doc_hl_style()
+		vim.api.nvim_create_autocmd("ColorScheme", { callback = doc_hl_style })
+
 		----------------------------------------------------------------------
 		-- Server settings
 		----------------------------------------------------------------------
@@ -167,6 +177,21 @@ return {
 				if client and client:supports_method("textDocument/foldingRange") then
 					local win = vim.api.nvim_get_current_win()
 					vim.wo[win][0].foldexpr = "v:lua.vim.lsp.foldexpr()"
+				end
+
+				-- Symbol-under-cursor glow on idle; cleared the moment you move.
+				if client and client:supports_method("textDocument/documentHighlight") then
+					local g = vim.api.nvim_create_augroup("noob-doc-hl-" .. buf, { clear = true })
+					vim.api.nvim_create_autocmd({ "CursorHold", "CursorHoldI" }, {
+						group = g,
+						buffer = buf,
+						callback = vim.lsp.buf.document_highlight,
+					})
+					vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+						group = g,
+						buffer = buf,
+						callback = vim.lsp.buf.clear_references,
+					})
 				end
 
 				-- Inlay hints toggle (off by default)

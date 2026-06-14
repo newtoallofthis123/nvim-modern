@@ -19,6 +19,27 @@ keymap.set("n", "<leader>ra", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Lef
 keymap.set("n", "<leader>cn", "*``cgn", { desc = "Change word → next match (dot-repeat)" })
 keymap.set("n", "<leader>cN", "*``cgN", { desc = "Change word → prev match (dot-repeat)" })
 
+-- Move the visual selection up/down (and reindent into its new context)
+keymap.set("x", "J", ":m '>+1<CR>gv=gv", { desc = "Move selection down" })
+keymap.set("x", "K", ":m '<-2<CR>gv=gv", { desc = "Move selection up" })
+
+-- Keep the selection after indenting so < / > repeat
+keymap.set("x", "<", "<gv")
+keymap.set("x", ">", ">gv")
+
+-- Paste over a selection without clobbering what you yanked
+keymap.set("x", "p", [["_dP]], { desc = "Paste without losing register" })
+
+-- Jump between git conflict markers (centered)
+keymap.set("n", "]x", [[/^\(<<<<<<<\|=======\|>>>>>>>\)<CR>zz]], { desc = "Next conflict marker" })
+keymap.set("n", "[x", [[?^\(<<<<<<<\|=======\|>>>>>>>\)<CR>zz]], { desc = "Prev conflict marker" })
+
+-- Native undo-tree visualizer (ships with nvim 0.12; fills the time-machine hole)
+keymap.set("n", "<leader>U", function()
+	vim.cmd("packadd nvim.undotree")
+	vim.cmd("Undotree")
+end, { desc = "Undo tree" })
+
 keymap.set("n", "<leader>bn", ":bn<CR>", { noremap = true })
 keymap.set("n", "<leader>bp", ":bp<CR>", { noremap = true })
 keymap.set("n", "<leader>bb", ":ls<CR>:b ", { noremap = true, desc = "List buffers and switch" })

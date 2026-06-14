@@ -107,3 +107,36 @@ if vim.env.TMUX then
 		end,
 	})
 end
+
+-- Auto-reload files changed underneath us — the LLM writes in another pane,
+-- nvim refreshes the buffer when you focus/enter/idle on it, and says so.
+vim.o.autoread = true
+local autoreload = vim.api.nvim_create_augroup("auto_reload", { clear = true })
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
+	group = autoreload,
+	callback = function()
+		-- checktime errors inside the cmdline window; guard it
+		if vim.fn.mode() ~= "c" and vim.fn.getcmdwintype() == "" then
+			vim.cmd("checktime")
+		end
+	end,
+})
+vim.api.nvim_create_autocmd("FileChangedShellPost", {
+	group = autoreload,
+	callback = function()
+		vim.notify("Reloaded — file changed on disk", vim.log.levels.INFO)
+	end,
+})
+
+-- Flash the line when you drop a named mark (0.12 MarkSet event)
+local mark_ns = vim.api.nvim_create_namespace("mark_flash")
+vim.api.nvim_create_autocmd("MarkSet", {
+	group = vim.api.nvim_create_augroup("mark_flash", { clear = true }),
+	callback = function(ev)
+		if not (ev.match or ""):match("^%a$") then
+			return
+		end
+		local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+		vim.hl.range(0, mark_ns, "Visual", { row, 0 }, { row, -1 }, { timeout = 200 })
+	end,
+})
