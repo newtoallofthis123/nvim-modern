@@ -1,16 +1,16 @@
--- satchel — a ticket-writer's context basket.
+-- satchel — a ticket and its context bucket are the SAME thing.
 --
--- You work in named *buckets*. "Enter" a bucket and everything you toss flows
--- into it silently; while writing the ticket, drop those refs at your cursor.
--- Refs use your @path#L40-58 convention; selections carry a fenced code block.
--- Session-only (v1). Pickers reuse snacks; formatting reuses custom/copy.
+-- <leader>sn names one → creates a markdown ticket (<ddmmyyyy>_<name>.md) AND a
+-- bucket of @refs, linked. Toss refs while browsing code; <leader>sg jumps to
+-- the ticket and dumps them in. Refs use @path#L40-58; selections carry a
+-- fenced code block. Session-only (v1). Pickers reuse snacks; fmt reuses copy.
 local copy = require("custom.copy")
 
 local M = {}
 
--- state ---------------------------------------------------------------------
-M.buckets = {} -- { [name] = { item, item, ... } }   item = {ref, code?, ft?}
-M.active = nil -- name | nil
+-- state: M.buckets[name] = { items = {item,...}, ticket = "<file>.md", bufnr }
+M.buckets = {}
+M.active = nil
 
 -- helpers -------------------------------------------------------------------
 local function rel(abspath)
@@ -21,22 +21,24 @@ end
 function M.refresh()
 	pcall(vim.cmd, "redrawstatus")
 end
-
 function M.set_active(name)
 	M.active = name
 	M.refresh()
 end
 
+local function bucket()
+	return M.active and M.buckets[M.active]
+end
+
 local function add_item(name, item)
-	table.insert(M.buckets[name], item)
+	table.insert(M.buckets[name].items, item)
 	M.refresh()
 end
 
 local function toast(name)
-	vim.notify(("🪣 %s ·%d"):format(name, #M.buckets[name]))
+	vim.notify(("🪣 %s ·%d"):format(name, #M.buckets[name].items))
 end
 
--- render an item into ticket lines: the ref, then an optional fenced block
 local function render(item)
 	local lines = { item.ref }
 	if item.code and item.code ~= "" then
@@ -52,11 +54,24 @@ end
 local function insert_inline(text)
 	vim.api.nvim_put({ text }, "c", true, true)
 end
-
 local function insert_block(lines)
 	if #lines > 0 then
 		vim.api.nvim_put(lines, "l", true, true)
 	end
+end
+
+local function blocks_of(items)
+	local lines = {}
+	for _, it in ipairs(items) do
+		for _, l in ipairs(render(it)) do
+			lines[#lines + 1] = l
+		end
+		lines[#lines + 1] = ""
+	end
+	if #lines > 0 then
+		table.remove(lines)
+	end
+	return lines
 end
 
 -- a tiny list picker (snacks if present, else vim.ui.select) -----------------
@@ -67,9 +82,9 @@ local function pick_list(title, items, on_confirm, multi)
 			format_item = function(i)
 				return i.text
 			end,
-		}, function(choice)
-			if choice then
-				on_confirm({ choice })
+		}, function(c)
+			if c then
+				on_confirm({ c })
 			end
 		end)
 		return
@@ -88,15 +103,55 @@ local function pick_list(title, items, on_confirm, multi)
 	})
 end
 
--- bucket lifecycle ----------------------------------------------------------
-function M.create_bucket(after)
-	vim.ui.input({ prompt = "New bucket name: " }, function(name)
+-- ticket = bucket: create + open -------------------------------------------
+local function make_bucket(name)
+	local file = ("%s_%s.md"):format(vim.fn.strftime("%d%m%Y"), (name:gsub("%s+", "-")))
+	M.buckets[name] = { items = {}, ticket = file, bufnr = nil }
+	M.set_active(name)
+	return file
+end
+
+function M.open_ticket(name)
+	local b = M.buckets[name]
+	if not b then
+		return
+	end
+	if b.bufnr and vim.api.nvim_buf_is_valid(b.bufnr) then
+		local win = vim.fn.bufwinid(b.bufnr)
+		if win ~= -1 then
+			vim.api.nvim_set_current_win(win)
+		else
+			vim.cmd("buffer " .. b.bufnr)
+		end
+	else
+		vim.cmd("enew")
+		local buf = vim.api.nvim_get_current_buf()
+		pcall(vim.api.nvim_buf_set_name, buf, b.ticket)
+		vim.bo.filetype = "markdown"
+		b.bufnr = buf
+	end
+end
+
+-- <leader>sn : name → new ticket+bucket, opens the ticket
+function M.new_ticket()
+	vim.ui.input({ prompt = "Ticket name: " }, function(name)
 		if not name or name == "" then
 			return
 		end
-		M.buckets[name] = M.buckets[name] or {}
-		M.set_active(name)
-		vim.notify("🪣 entered bucket: " .. name)
+		local file = make_bucket(name)
+		M.open_ticket(name)
+		vim.notify("🪣📝 " .. name .. "  →  " .. file)
+	end)
+end
+
+-- create a bucket WITHOUT stealing focus (used mid-toss from a code buffer)
+local function prompt_make(after)
+	vim.ui.input({ prompt = "Ticket name: " }, function(name)
+		if not name or name == "" then
+			return
+		end
+		local file = make_bucket(name)
+		vim.notify("🪣 " .. name .. "  →  " .. file)
 		if after then
 			after(name)
 		end
@@ -106,20 +161,20 @@ end
 function M.enter_bucket()
 	local names = vim.tbl_keys(M.buckets)
 	if #names == 0 then
-		return M.create_bucket()
+		return M.new_ticket()
 	end
 	local items = {}
 	for _, n in ipairs(names) do
 		items[#items + 1] = { text = n, name = n }
 	end
-	items[#items + 1] = { text = "＋ new bucket…", new = true }
+	items[#items + 1] = { text = "＋ new ticket…", new = true }
 	pick_list("Enter bucket", items, function(sel)
 		local it = sel and sel[1]
 		if not it then
 			return
 		end
 		if it.new then
-			M.create_bucket()
+			M.new_ticket()
 		else
 			M.set_active(it.name)
 			vim.notify("🪣 " .. it.name)
@@ -136,27 +191,27 @@ function M.leave_bucket()
 	vim.notify("left bucket: " .. n)
 end
 
--- resolve a target bucket for TOSSING (active, else pick or create) ----------
+-- resolve target for TOSSING (active, else pick/create — never steals focus)
 function M.with_bucket(cb)
-	if M.active and M.buckets[M.active] then
+	if bucket() then
 		return cb(M.active)
 	end
 	local names = vim.tbl_keys(M.buckets)
 	if #names == 0 then
-		return M.create_bucket(cb)
+		return prompt_make(cb)
 	end
 	local items = {}
 	for _, n in ipairs(names) do
 		items[#items + 1] = { text = n, name = n }
 	end
-	items[#items + 1] = { text = "＋ new bucket…", new = true }
+	items[#items + 1] = { text = "＋ new ticket…", new = true }
 	pick_list("Toss into", items, function(sel)
 		local it = sel and sel[1]
 		if not it then
 			return
 		end
 		if it.new then
-			M.create_bucket(cb)
+			prompt_make(cb)
 		else
 			M.set_active(it.name)
 			cb(it.name)
@@ -164,14 +219,14 @@ function M.with_bucket(cb)
 	end)
 end
 
--- resolve a target bucket for DROP/DUMP/MANAGE (must already exist) ----------
+-- resolve an EXISTING bucket for drop/dump/manage/go
 function M.with_existing(cb)
-	if M.active and M.buckets[M.active] then
+	if bucket() then
 		return cb(M.active)
 	end
 	local names = vim.tbl_keys(M.buckets)
 	if #names == 0 then
-		vim.notify("no buckets yet — toss something first", vim.log.levels.WARN)
+		vim.notify("no tickets yet — <leader>sn", vim.log.levels.WARN)
 		return
 	end
 	local items = {}
@@ -220,7 +275,6 @@ function M.toss_selection()
 end
 
 -- insert --------------------------------------------------------------------
--- instant: pick any file, drop its @ref at the cursor (no bucket needed)
 function M.insert_file_ref()
 	if not (Snacks and Snacks.picker) then
 		vim.notify("snacks picker not available", vim.log.levels.WARN)
@@ -235,32 +289,27 @@ function M.insert_file_ref()
 	})
 end
 
-local function blocks_of(items)
-	local lines = {}
-	for _, it in ipairs(items) do
-		for _, l in ipairs(render(it)) do
-			lines[#lines + 1] = l
-		end
-		lines[#lines + 1] = ""
+local function insert_all(name)
+	local items = M.buckets[name].items
+	if #items == 0 then
+		vim.notify("bucket is empty")
+		return
 	end
-	if #lines > 0 then
-		table.remove(lines) -- drop trailing blank
-	end
-	return lines
+	insert_block(blocks_of(items))
 end
 
 function M.drop()
 	M.with_existing(function(name)
-		local b = M.buckets[name]
-		if #b == 0 then
+		local items = M.buckets[name].items
+		if #items == 0 then
 			vim.notify("bucket is empty")
 			return
 		end
-		local items = {}
-		for _, it in ipairs(b) do
-			items[#items + 1] = { text = it.ref, item = it }
+		local list = {}
+		for _, it in ipairs(items) do
+			list[#list + 1] = { text = it.ref, item = it }
 		end
-		pick_list("Drop from " .. name, items, function(sel)
+		pick_list("Drop from " .. name, list, function(sel)
 			local picked = {}
 			for _, s in ipairs(sel) do
 				picked[#picked + 1] = s.item
@@ -272,27 +321,31 @@ end
 
 function M.dump()
 	M.with_existing(function(name)
-		local b = M.buckets[name]
-		if #b == 0 then
-			vim.notify("bucket is empty")
-			return
-		end
-		insert_block(blocks_of(b))
+		insert_all(name)
+	end)
+end
+
+-- <leader>sg : go to the ticket buffer and dump the whole bucket at the end
+function M.go_dump()
+	M.with_existing(function(name)
+		M.open_ticket(name)
+		vim.cmd("normal! G")
+		insert_all(name)
 	end)
 end
 
 function M.manage()
 	M.with_existing(function(name)
-		local b = M.buckets[name]
-		if #b == 0 then
+		local items = M.buckets[name].items
+		if #items == 0 then
 			vim.notify("bucket is empty")
 			return
 		end
-		local items = {}
-		for i, it in ipairs(b) do
-			items[#items + 1] = { text = it.ref, idx = i }
+		local list = {}
+		for i, it in ipairs(items) do
+			list[#list + 1] = { text = it.ref, idx = i }
 		end
-		pick_list("Remove from " .. name, items, function(sel)
+		pick_list("Remove from " .. name, list, function(sel)
 			local idxs = {}
 			for _, s in ipairs(sel) do
 				idxs[#idxs + 1] = s.idx
@@ -301,32 +354,12 @@ function M.manage()
 				return a > c
 			end)
 			for _, i in ipairs(idxs) do
-				table.remove(b, i)
+				table.remove(items, i)
 			end
 			vim.notify(("removed %d from %s"):format(#idxs, name))
 			M.refresh()
 		end, true)
 	end)
-end
-
--- compose: a fresh, named markdown scratch to write the ticket in -----------
-local function rand_hash(n)
-	math.randomseed(vim.uv.hrtime() % 2147483647)
-	local chars = "0123456789abcdef"
-	local t = {}
-	for i = 1, n do
-		local k = math.random(#chars)
-		t[i] = chars:sub(k, k)
-	end
-	return table.concat(t)
-end
-
-function M.compose()
-	local name = ("%s_%s.md"):format(vim.fn.strftime("%d%m%Y"), rand_hash(6))
-	vim.cmd("enew")
-	vim.api.nvim_buf_set_name(0, name)
-	vim.bo.filetype = "markdown"
-	vim.notify("📝 " .. name .. "  (:w to save it wherever)")
 end
 
 -- lualine surface -----------------------------------------------------------
@@ -337,22 +370,22 @@ function M.label()
 	return M.is_active() and ("🪣 " .. M.active) or ""
 end
 function M.count()
-	return M.is_active() and ("·" .. #M.buckets[M.active]) or ""
+	return M.is_active() and ("·" .. #M.buckets[M.active].items) or ""
 end
 
 -- setup ---------------------------------------------------------------------
 function M.setup()
 	local map = vim.keymap.set
-	map("n", "<leader>sn", M.create_bucket, { desc = "Satchel: new bucket" })
-	map("n", "<leader>se", M.enter_bucket, { desc = "Satchel: enter bucket" })
-	map("n", "<leader>sx", M.leave_bucket, { desc = "Satchel: leave bucket" })
+	map("n", "<leader>sn", M.new_ticket, { desc = "Satchel: new ticket+bucket" })
+	map("n", "<leader>se", M.enter_bucket, { desc = "Satchel: enter ticket" })
+	map("n", "<leader>sx", M.leave_bucket, { desc = "Satchel: leave ticket" })
 	map("n", "<leader>st", M.toss_file, { desc = "Satchel: toss current file" })
 	map("x", "<leader>st", M.toss_selection, { desc = "Satchel: toss selection" })
 	map("n", "<leader>sf", M.insert_file_ref, { desc = "Satchel: insert file ref" })
-	map("n", "<leader>sd", M.drop, { desc = "Satchel: drop refs" })
-	map("n", "<leader>sD", M.dump, { desc = "Satchel: dump bucket" })
-	map("n", "<leader>ss", M.manage, { desc = "Satchel: manage bucket" })
-	map("n", "<leader>sc", M.compose, { desc = "Satchel: compose ticket (new .md)" })
+	map("n", "<leader>sd", M.drop, { desc = "Satchel: drop refs (pick)" })
+	map("n", "<leader>sD", M.dump, { desc = "Satchel: dump at cursor" })
+	map("n", "<leader>sg", M.go_dump, { desc = "Satchel: go to ticket + dump" })
+	map("n", "<leader>ss", M.manage, { desc = "Satchel: manage ticket" })
 end
 
 M.setup()
