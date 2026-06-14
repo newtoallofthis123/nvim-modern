@@ -36,15 +36,17 @@ return {
 							end
 						end
 
+						-- tight: number sits right next to the icon+name; the whole
+						-- active tab is one gold unit. underline runs the full bar
+						-- (muted hairline) and goes gold under the active tab —
+						-- that's both the active marker AND separation from the code.
 						return {
-							" ",
 							tab.number(),
 							" ",
 							icon,
 							tab.name(),
 							modified,
-							" ",
-							hl = { fg = fg, bg = "NONE", style = current and "bold" or nil },
+							hl = { fg = fg, bg = "NONE", style = current and "underline" or nil },
 							margin = " ",
 						}
 					end),
