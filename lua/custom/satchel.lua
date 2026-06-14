@@ -19,6 +19,7 @@ local function rel(abspath)
 end
 
 function M.refresh()
+	pcall(vim.cmd, "redrawtabline")
 	pcall(vim.cmd, "redrawstatus")
 end
 function M.set_active(name)

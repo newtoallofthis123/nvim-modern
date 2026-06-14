@@ -12,11 +12,20 @@ return {
 
 		require("tabby").setup({
 			line = function(line)
-				-- left: current project / repo name, quiet grey
-				local project = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
+				-- left: the active satchel ticket (muted name + gold count), if any
+				local ticket = ""
+				do
+					local ok, s = pcall(require, "custom.satchel")
+					if ok and s.is_active() then
+						ticket = {
+							{ "  " .. s.label() .. " ", hl = { fg = c.muted, bg = "NONE" } },
+							{ s.count() .. "  ", hl = { fg = c.gold, bg = "NONE" } },
+						}
+					end
+				end
 
 				return {
-					{ { "  " .. project .. "   ", hl = { fg = c.muted, bg = "NONE" } } },
+					ticket,
 					line.tabs().foreach(function(tab)
 						local current = tab.is_current()
 						local fg = current and c.gold or c.muted
@@ -36,17 +45,14 @@ return {
 							end
 						end
 
-						-- tight: number sits right next to the icon+name; the whole
-						-- active tab is one gold unit. underline runs the full bar
-						-- (muted hairline) and goes gold under the active tab —
-						-- that's both the active marker AND separation from the code.
 						return {
-							tab.number(),
 							" ",
+							tab.number(),
 							icon,
 							tab.name(),
 							modified,
-							hl = { fg = fg, bg = "NONE", style = current and "underline" or nil },
+							" ",
+							hl = { fg = fg, bg = "NONE", style = current and "bold" or nil },
 							margin = " ",
 						}
 					end),
