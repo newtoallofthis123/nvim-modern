@@ -74,11 +74,14 @@ return {
 			},
 		}
 
-		-- Elixir (Expert) — native arm64 via `brew install expert`.
-		vim.lsp.config("expert", {
-			cmd = { "expert", "--stdio" },
-			root_markers = { "mix.exs", ".git" },
+		-- Elixir (Dexter) — `brew install dexter-lsp`.
+		vim.lsp.config("dexter", {
+			cmd = { "dexter", "lsp" },
+			root_markers = { ".dexter/dexter.db", ".dexter.db", "mix.exs", ".git" },
 			filetypes = { "elixir", "eelixir", "heex" },
+			init_options = {
+				followDelegates = true, -- jump through defdelegate to the target
+			},
 		})
 
 		----------------------------------------------------------------------
@@ -211,7 +214,7 @@ return {
 			"ts_ls",
 			"emmet_ls",
 			"rust_analyzer",
-			"expert",
+			"dexter",
 			"gopls",
 			"astro",
 			"ty",
