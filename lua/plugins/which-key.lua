@@ -10,6 +10,7 @@ return {
 			{ "<leader>f", group = "find / search" },
 			{ "<leader>g", group = "git" },
 			{ "<leader>h", group = "hunks (gitsigns)" },
+			{ "<leader>j", group = "just / server" },
 			{ "<leader>l", group = "lsp" },
 			{ "<leader>n", group = "notes" },
 			{ "<leader>q", group = "session" },
