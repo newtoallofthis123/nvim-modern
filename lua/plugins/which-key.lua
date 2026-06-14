@@ -21,6 +21,8 @@ return {
 			{ "<leader>z", group = "harpoon nav" },
 			{ "<leader>r", group = "refactor" },
 			{ "<leader>s", group = "satchel" },
+			{ "<leader>sa", group = "toss node" },
+			{ "<leader>sA", group = "toss node → ticket" },
 		},
 	},
 	keys = {

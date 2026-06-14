@@ -74,6 +74,51 @@ local function blocks_of(items)
 	return lines
 end
 
+-- treesitter capture: functions / classes / loops / modules ----------------
+local SCOPE_KIND = { f = "fn", c = "class", o = "", m = "mod" }
+local MODULE_TYPES = {
+	module = true,
+	mod_item = true,
+	namespace_declaration = true,
+	internal_module = true,
+	module_definition = true,
+}
+
+local function ts_name(node)
+	while node do
+		local f = node:field("name")
+		if f and f[1] then
+			return vim.treesitter.get_node_text(f[1], 0)
+		end
+		node = node:parent()
+	end
+end
+
+local function node_at(line1, col1)
+	local ok, n = pcall(vim.treesitter.get_node, { pos = { math.max(line1 - 1, 0), math.max(col1 - 1, 0) } })
+	return ok and n or nil
+end
+
+-- enclosing module-ish node (also catches elixir's `defmodule` call), or nil
+local function module_node()
+	local ok, node = pcall(vim.treesitter.get_node)
+	if not ok then
+		return nil
+	end
+	while node do
+		if MODULE_TYPES[node:type()] then
+			return node
+		end
+		if node:type() == "call" then
+			local first = node:named_child(0)
+			if first and vim.treesitter.get_node_text(first, 0) == "defmodule" then
+				return node
+			end
+		end
+		node = node:parent()
+	end
+end
+
 -- a tiny list picker (snacks if present, else vim.ui.select) -----------------
 local function pick_list(title, items, on_confirm, multi)
 	if not (Snacks and Snacks.picker) then
@@ -111,30 +156,49 @@ local function make_bucket(name)
 	return file
 end
 
+-- ensure the ticket's buffer exists (created hidden if needed); no focus change
+local function ensure_ticket_buf(name)
+	local b = M.buckets[name]
+	if b.bufnr and vim.api.nvim_buf_is_valid(b.bufnr) then
+		return b.bufnr
+	end
+	local buf = vim.api.nvim_create_buf(true, false)
+	pcall(vim.api.nvim_buf_set_name, buf, b.ticket)
+	vim.bo[buf].filetype = "markdown"
+	b.bufnr = buf
+	return buf
+end
+
+-- append a rendered item to the END of the ticket buffer WITHOUT leaving the
+-- current window, so you can fire it while browsing code
+local function append_to_ticket(name, item)
+	local buf = ensure_ticket_buf(name)
+	local cur = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+	local add = {}
+	if not (#cur == 1 and cur[1] == "") then
+		add[#add + 1] = ""
+	end
+	for _, l in ipairs(render(item)) do
+		add[#add + 1] = l
+	end
+	vim.api.nvim_buf_set_lines(buf, -1, -1, false, add)
+end
+
 function M.open_ticket(name)
 	local b = M.buckets[name]
 	if not b then
 		return
 	end
-	-- already open in a window (any tab)? jump to it.
-	if b.bufnr and vim.api.nvim_buf_is_valid(b.bufnr) then
-		for _, win in ipairs(vim.api.nvim_list_wins()) do
-			if vim.api.nvim_win_get_buf(win) == b.bufnr then
-				vim.api.nvim_set_current_win(win)
-				return
-			end
+	local buf = ensure_ticket_buf(name)
+	-- already open in a window (any tab)? jump to it; else new tab.
+	for _, win in ipairs(vim.api.nvim_list_wins()) do
+		if vim.api.nvim_win_get_buf(win) == buf then
+			vim.api.nvim_set_current_win(win)
+			return
 		end
-		-- exists but hidden → bring it up in a new tab
-		vim.cmd("tabnew")
-		vim.cmd("buffer " .. b.bufnr)
-		return
 	end
-	-- fresh ticket → new tab
 	vim.cmd("tabnew")
-	local buf = vim.api.nvim_get_current_buf()
-	pcall(vim.api.nvim_buf_set_name, buf, b.ticket)
-	vim.bo.filetype = "markdown"
-	b.bufnr = buf
+	vim.cmd("buffer " .. buf)
 end
 
 -- <leader>sn : name → new ticket+bucket, opens the ticket
@@ -271,12 +335,106 @@ function M.toss_selection()
 		s, e = e, s
 	end
 	local lines = vim.api.nvim_buf_get_lines(0, s - 1, e, false)
-	local ref = (s == e) and ("@%s#L%d"):format(r, s) or ("@%s#L%d-%d"):format(r, s, e)
+	local nm = ts_name(node_at(s, 1))
+	local ref = ("@%s#L%d%s%s"):format(r, s, (e ~= s and ("-" .. e) or ""), (nm and (" (" .. nm .. ")") or ""))
 	local ft = vim.bo.filetype
 	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
 	M.with_bucket(function(name)
 		add_item(name, { ref = ref, code = table.concat(lines, "\n"), ft = ft })
 		toast(name)
+	end)
+end
+
+-- <leader>sa{f,c,o,m} : toss a treesitter node, labeled with its name --------
+local function node_item(scope)
+	local r = copy.get_relative_filepath()
+	if r == "[No Name]" then
+		vim.notify("no file here", vim.log.levels.WARN)
+		return
+	end
+	local lstart, lend, nm
+	if scope == "m" then
+		local node = module_node()
+		if not node then
+			return { ref = "@" .. r, ft = vim.bo.filetype } -- module == file fallback
+		end
+		local sr, _, er = node:range()
+		lstart, lend, nm = sr + 1, er + 1, ts_name(node)
+	else
+		local ok, ai = pcall(require, "mini.ai")
+		if not ok then
+			vim.notify("mini.ai not available", vim.log.levels.WARN)
+			return
+		end
+		local region = ai.find_textobject("a", scope)
+		if not region then
+			vim.notify("no " .. (SCOPE_KIND[scope] ~= "" and SCOPE_KIND[scope] or scope) .. " under cursor", vim.log.levels.INFO)
+			return
+		end
+		lstart, lend = region.from.line, region.to.line
+		nm = ts_name(node_at(region.from.line, region.from.col))
+	end
+	local lines = vim.api.nvim_buf_get_lines(0, lstart - 1, lend, false)
+	local kind = SCOPE_KIND[scope] or ""
+	local label = nm and ((kind ~= "" and (kind .. " ") or "") .. nm) or nil
+	local ref = ("@%s#L%d%s%s"):format(
+		r,
+		lstart,
+		(lend ~= lstart and ("-" .. lend) or ""),
+		(label and (" (" .. label .. ")") or "")
+	)
+	return { ref = ref, code = table.concat(lines, "\n"), ft = vim.bo.filetype }
+end
+
+function M.toss_node(scope, to_ticket)
+	if not scope then
+		return
+	end
+	local item = node_item(scope)
+	if not item then
+		return
+	end
+	M.with_bucket(function(name)
+		if to_ticket then
+			append_to_ticket(name, item)
+			vim.notify("📝 " .. name .. " ← " .. item.ref)
+		else
+			add_item(name, item)
+			toast(name)
+		end
+	end)
+end
+
+-- <leader>sT : skip the bucket — append this file/selection straight to the
+-- ticket, in the background (you stay where you are).
+function M.toss_file_to_ticket()
+	local r = copy.get_relative_filepath()
+	if r == "[No Name]" then
+		vim.notify("no file here", vim.log.levels.WARN)
+		return
+	end
+	M.with_bucket(function(name)
+		append_to_ticket(name, { ref = "@" .. r })
+		vim.notify("📝 " .. name .. " ← @" .. r)
+	end)
+end
+
+function M.toss_sel_to_ticket()
+	local r = copy.get_relative_filepath()
+	if r == "[No Name]" then
+		return
+	end
+	local s, e = vim.fn.line("v"), vim.fn.line(".")
+	if s > e then
+		s, e = e, s
+	end
+	local lines = vim.api.nvim_buf_get_lines(0, s - 1, e, false)
+	local ref = (s == e) and ("@%s#L%d"):format(r, s) or ("@%s#L%d-%d"):format(r, s, e)
+	local ft = vim.bo.filetype
+	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+	M.with_bucket(function(name)
+		append_to_ticket(name, { ref = ref, code = table.concat(lines, "\n"), ft = ft })
+		vim.notify("📝 " .. name .. " ← " .. ref)
 	end)
 end
 
@@ -405,6 +563,19 @@ function M.setup()
 	-- toss is the one that differs by mode: file in normal, selection in visual
 	map("n", "<leader>st", M.toss_file, { desc = "Satchel: toss current file" })
 	map("x", "<leader>st", M.toss_selection, { desc = "Satchel: toss selection" })
+	-- sT skips the bucket: straight into the ticket, in the background
+	map("n", "<leader>sT", M.toss_file_to_ticket, { desc = "Satchel: toss file → ticket directly" })
+	map("x", "<leader>sT", M.toss_sel_to_ticket, { desc = "Satchel: toss selection → ticket directly" })
+	-- treesitter node toss: sa{f,c,o,m} → bucket, sA{f,c,o,m} → ticket
+	for _, sc in ipairs({ "f", "c", "o", "m" }) do
+		local kind = SCOPE_KIND[sc] ~= "" and SCOPE_KIND[sc] or "block"
+		map(nx, "<leader>sa" .. sc, function()
+			M.toss_node(sc, false)
+		end, { desc = "Satchel: toss " .. kind })
+		map(nx, "<leader>sA" .. sc, function()
+			M.toss_node(sc, true)
+		end, { desc = "Satchel: toss " .. kind .. " → ticket" })
+	end
 	map(nx, "<leader>sf", M.insert_file_ref, { desc = "Satchel: insert file ref" })
 	map(nx, "<leader>sd", M.drop, { desc = "Satchel: drop refs (pick)" })
 	map(nx, "<leader>sD", M.dump, { desc = "Satchel: dump at cursor" })
