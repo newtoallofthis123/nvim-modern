@@ -309,6 +309,26 @@ function M.manage()
 	end)
 end
 
+-- compose: a fresh, named markdown scratch to write the ticket in -----------
+local function rand_hash(n)
+	math.randomseed(vim.uv.hrtime() % 2147483647)
+	local chars = "0123456789abcdef"
+	local t = {}
+	for i = 1, n do
+		local k = math.random(#chars)
+		t[i] = chars:sub(k, k)
+	end
+	return table.concat(t)
+end
+
+function M.compose()
+	local name = ("%s_%s.md"):format(vim.fn.strftime("%d%m%Y"), rand_hash(6))
+	vim.cmd("enew")
+	vim.api.nvim_buf_set_name(0, name)
+	vim.bo.filetype = "markdown"
+	vim.notify("📝 " .. name .. "  (:w to save it wherever)")
+end
+
 -- lualine surface -----------------------------------------------------------
 function M.is_active()
 	return M.active ~= nil and M.buckets[M.active] ~= nil
@@ -332,6 +352,7 @@ function M.setup()
 	map("n", "<leader>sd", M.drop, { desc = "Satchel: drop refs" })
 	map("n", "<leader>sD", M.dump, { desc = "Satchel: dump bucket" })
 	map("n", "<leader>ss", M.manage, { desc = "Satchel: manage bucket" })
+	map("n", "<leader>sc", M.compose, { desc = "Satchel: compose ticket (new .md)" })
 end
 
 M.setup()
