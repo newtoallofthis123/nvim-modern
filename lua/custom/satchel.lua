@@ -368,6 +368,22 @@ function M.manage()
 	end)
 end
 
+-- <leader>sc : empty the bucket (keeps the ticket + active state)
+function M.clear()
+	M.with_existing(function(name)
+		local n = #M.buckets[name].items
+		if n == 0 then
+			vim.notify("bucket already empty")
+			return
+		end
+		if vim.fn.confirm(("Clear %d refs from %s?"):format(n, name), "&Yes\n&No", 2) == 1 then
+			M.buckets[name].items = {}
+			M.refresh()
+			vim.notify("cleared " .. name)
+		end
+	end)
+end
+
 -- lualine surface -----------------------------------------------------------
 function M.is_active()
 	return M.active ~= nil and M.buckets[M.active] ~= nil
@@ -394,6 +410,7 @@ function M.setup()
 	map(nx, "<leader>sD", M.dump, { desc = "Satchel: dump at cursor" })
 	map(nx, "<leader>sg", M.go_dump, { desc = "Satchel: go to ticket + dump" })
 	map(nx, "<leader>ss", M.manage, { desc = "Satchel: manage ticket" })
+	map(nx, "<leader>sc", M.clear, { desc = "Satchel: clear bucket" })
 end
 
 M.setup()
