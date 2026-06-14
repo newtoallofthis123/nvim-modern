@@ -97,9 +97,25 @@ keymap.set("n", "<leader>w<Up>", "<C-w>k", { desc = "Go to window above" })
 keymap.set("n", "<leader>w<Right>", "<C-w>l", { desc = "Go to right window" })
 
 -- Window resize/maximize
-keymap.set("n", "<leader>wm", "<C-w>_<C-w>|", { desc = "Maximize current split" })
+-- Zoom: maximize this split; press again to restore the EXACT prior layout
+local zoom_restore
+keymap.set("n", "<leader>wm", function()
+	if zoom_restore then
+		vim.cmd(zoom_restore)
+		zoom_restore = nil
+	elseif vim.fn.winnr("$") > 1 then
+		zoom_restore = vim.fn.winrestcmd()
+		vim.cmd("wincmd _ | wincmd |")
+	end
+end, { desc = "Zoom split (maximize/restore)" })
 keymap.set("n", "<leader>we", "<C-w>=", { desc = "Equalize split sizes" })
 keymap.set("n", "<leader>wo", "<C-w>o", { desc = "Close all other splits" })
+keymap.set("n", "<leader>wt", "<C-w>T", { desc = "Break split into a new tab" })
+
+-- The flip family: jump to the OTHER one, no picker (cousins of <C-o>)
+keymap.set("n", "<BS>", "<C-^>", { desc = "Flip to alternate file" })
+keymap.set("n", "<C-w>p", "<C-w>p", { desc = "Flip to last window" })
+keymap.set("n", "g<Tab>", "g<Tab>", { desc = "Flip to last tab" })
 
 keymap.set("n", "<leader>vd", vim.diagnostic.open_float, { noremap = true, desc = "Open diagnostic float" })
 
