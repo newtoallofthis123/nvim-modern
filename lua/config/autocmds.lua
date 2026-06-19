@@ -128,6 +128,20 @@ vim.api.nvim_create_autocmd("FileChangedShellPost", {
 	end,
 })
 
+-- Re-diff an open Diffview when you focus nvim (e.g. tab back from the agent
+-- pane). Diffview computes its diff once on open and doesn't watch the working
+-- tree, so the agent's edits won't show until it's refreshed. pcall-guarded:
+-- before Diffview is ever opened the module isn't on the rtp, so this no-ops.
+vim.api.nvim_create_autocmd("FocusGained", {
+	group = autoreload,
+	callback = function()
+		local ok, lib = pcall(require, "diffview.lib")
+		if ok and next(lib.views) ~= nil then
+			pcall(vim.cmd, "DiffviewRefresh")
+		end
+	end,
+})
+
 -- Reflow width for prose so gq / gw wrap cleanly: markdown 80, commits 72
 vim.api.nvim_create_autocmd("FileType", {
 	group = vim.api.nvim_create_augroup("prose_textwidth", { clear = true }),

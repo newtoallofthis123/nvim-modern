@@ -74,10 +74,14 @@ return {
 			},
 		}
 
-		-- Elixir (Dexter) — `brew install dexter-lsp`.
+		-- Elixir (Dexter) — `brew install dexter-lsp`. Nav + format only; it
+		-- does NOT emit compiler diagnostics by design (upstream issue #29).
+		-- NOTE: don't put `.dexter/dexter.db` in root_markers — a nested-path
+		-- marker resolves root_dir to the `.dexter/` index folder instead of the
+		-- project. mix.exs/.git pin it to the actual project root.
 		vim.lsp.config("dexter", {
 			cmd = { "dexter", "lsp" },
-			root_markers = { ".dexter/dexter.db", ".dexter.db", "mix.exs", ".git" },
+			root_markers = { "mix.exs", ".git" },
 			filetypes = { "elixir", "eelixir", "heex" },
 			init_options = {
 				followDelegates = true, -- jump through defdelegate to the target

@@ -354,6 +354,17 @@ _   __            __   _
 			desc = "LSP Definitions",
 		},
 		{
+			-- Project-wide module search: workspace symbols filtered to
+			-- modules. Type to query the LSP index (Dexter for Elixir).
+			"<leader>O",
+			function()
+				Snacks.picker.lsp_workspace_symbols({
+					filter = { default = { "Module" } },
+				})
+			end,
+			desc = "Project Modules",
+		},
+		{
 			"<leader>R",
 			function()
 				Snacks.picker.registers()

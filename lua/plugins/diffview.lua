@@ -26,8 +26,8 @@ return {
 		{
 			"<leader>gD",
 			function()
-				-- Review the whole branch against its base (everything the LLM
-				-- built on this branch, not just uncommitted changes)
+				-- Review the whole branch against its base — everything the LLM
+				-- built here, INCLUDING brand-new files it hasn't committed yet.
 				local base
 				for _, b in ipairs({ "origin/main", "origin/master", "main", "master" }) do
 					vim.fn.system("git rev-parse --verify " .. b)
@@ -40,9 +40,18 @@ return {
 					vim.notify("No main/master branch found", vim.log.levels.WARN)
 					return
 				end
-				vim.cmd("DiffviewOpen " .. base .. "...HEAD --imply-local")
+				-- merge-base, so main's own newer commits don't show as reverse
+				-- diffs. Opened as a single-rev WORKING-TREE view (not a `a...b`
+				-- commit range): a range can only show committed trees, so new
+				-- untracked/uncommitted files are invisible. The working-tree view
+				-- diffs merge-base → your real files and includes untracked ones.
+				local mb = vim.fn.systemlist("git merge-base " .. base .. " HEAD")[1]
+				if not mb or mb == "" then
+					mb = base
+				end
+				vim.cmd("DiffviewOpen " .. mb .. " --untracked-files=all")
 			end,
-			desc = "Diff: branch vs main",
+			desc = "Diff: branch vs main (incl. new files)",
 		},
 		{ "<leader>gh", "<cmd>DiffviewFileHistory %<cr>", desc = "Diff: file history" },
 		{ "<leader>gH", "<cmd>DiffviewFileHistory<cr>", desc = "Diff: repo history" },
