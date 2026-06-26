@@ -13,6 +13,15 @@ function M.get_relative_filepath()
 	return relative_path
 end
 
+-- Absolute path from the filesystem root (/), plain, no @ prefix.
+function M.get_absolute_filepath()
+	local filepath = vim.fn.expand("%:p")
+	if filepath == "" then
+		return "[No Name]"
+	end
+	return filepath
+end
+
 -- Numeric line range of the cursor (normal) or live selection (visual).
 function M.get_line_range()
 	local mode = vim.fn.mode()
@@ -68,8 +77,18 @@ function M.copy_buffer_path_with_line()
 	vim.notify("Copied to clipboard: " .. formatted_path)
 end
 
+function M.copy_root_path()
+	local path = M.get_absolute_filepath()
+	vim.fn.setreg("+", path)
+	vim.notify("Copied to clipboard: " .. path)
+end
+
 function M.setup()
 	-- Register commands
+	vim.api.nvim_create_user_command("CopyRootPath", M.copy_root_path, {
+		desc = "Copy current file path relative to the project root (plain, no @)",
+	})
+
 	vim.api.nvim_create_user_command("CopyBufferPath", M.copy_buffer_path, {
 		desc = "Copy current buffer path to clipboard (@filename format)",
 	})
@@ -81,6 +100,7 @@ function M.setup()
 	-- Set keybindings (copy-context group: paste @file refs to the LLM)
 	local keymap = vim.keymap.set
 	keymap("n", "<leader>cp", M.copy_buffer_path, { desc = "Copy buffer path (@file)" })
+	keymap("n", "<leader>cP", M.copy_root_path, { desc = "Copy absolute file path (from /)" })
 	keymap("n", "<leader>cl", M.copy_buffer_path_with_line, { desc = "Copy buffer path with line (@file#123)" })
 	keymap("v", "<leader>cl", M.copy_buffer_path_with_line, { desc = "Copy buffer path with line range" })
 end

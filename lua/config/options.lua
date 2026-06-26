@@ -119,3 +119,16 @@ vim.api.nvim_create_autocmd("TextYankPost", {
 		vim.hl.on_yank()
 	end,
 })
+
+-- macOS clipboard, yank-only: an explicit yank (y) mirrors to the system
+-- clipboard via the + register (pbcopy, see vim.g.clipboard above). Deletes
+-- and changes (d/c/x) stay in Neovim's own registers and never clobber it.
+vim.api.nvim_create_autocmd("TextYankPost", {
+	desc = "Mirror yanks (not deletes) to the macOS clipboard",
+	group = vim.api.nvim_create_augroup("yank-to-clipboard", { clear = true }),
+	callback = function()
+		if vim.v.event.operator == "y" then
+			vim.fn.setreg("+", vim.v.event.regcontents, vim.v.event.regtype)
+		end
+	end,
+})
