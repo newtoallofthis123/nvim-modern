@@ -73,17 +73,20 @@ vim.api.nvim_create_autocmd("WinLeave", {
 -- LSP indexing pulse → tmux pane border. While any language server is busy
 -- (begin..end progress) the active pane border glows gold, then resets the
 -- moment all servers go idle. Your editor talking to your multiplexer.
-if vim.env.TMUX then
+if vim.env.TMUX and vim.env.TMUX_PANE then
 	local pulse = vim.api.nvim_create_augroup("tmux_lsp_pulse", { clear = true })
+	-- Target OUR window explicitly: bare -w acts on the window the user is
+	-- currently VIEWING, not the one nvim runs in (bit us with @nvim too).
+	local pane = vim.env.TMUX_PANE
 	-- Remember the theme's own border colour so we restore it, not "default".
-	local rest = vim.fn.system({ "tmux", "show-options", "-wv", "pane-active-border-style" })
+	local rest = vim.fn.system({ "tmux", "show-options", "-t", pane, "-wv", "pane-active-border-style" })
 	rest = (rest:gsub("%s+$", ""))
 	if rest == "" then
 		rest = "default"
 	end
 	local active = 0
 	local function border(on)
-		vim.system({ "tmux", "set", "-w", "pane-active-border-style", on and "fg=#f6c177" or rest })
+		vim.system({ "tmux", "set", "-w", "-t", pane, "pane-active-border-style", on and "fg=#f6c177" or rest })
 	end
 	vim.api.nvim_create_autocmd("LspProgress", {
 		group = pulse,
@@ -168,18 +171,22 @@ vim.api.nvim_create_autocmd("MarkSet", {
 -- (the agent / a just recipe / scripts can `nvim --server "$NVIM" --remote …`).
 -- A zsh precmd exports $NVIM from this @nvim option. Window-scoped: each window
 -- advertises its own nvim. Cleared on exit.
-if vim.env.TMUX then
+if vim.env.TMUX and vim.env.TMUX_PANE then
 	local grp = vim.api.nvim_create_augroup("nvim_socket_publish", { clear = true })
+	-- -t is load-bearing: bare -w targets the window the user is WATCHING,
+	-- not the one nvim runs in — spawned/background nvims stamped the wrong
+	-- window (or the right one only by luck).
+	local pane = vim.env.TMUX_PANE
 	vim.api.nvim_create_autocmd("VimEnter", {
 		group = grp,
 		callback = function()
-			vim.system({ "tmux", "set-option", "-w", "@nvim", vim.v.servername })
+			vim.system({ "tmux", "set-option", "-w", "-t", pane, "@nvim", vim.v.servername })
 		end,
 	})
 	vim.api.nvim_create_autocmd("VimLeavePre", {
 		group = grp,
 		callback = function()
-			vim.system({ "tmux", "set-option", "-uw", "@nvim" })
+			vim.system({ "tmux", "set-option", "-uw", "-t", pane, "@nvim" })
 		end,
 	})
 end
