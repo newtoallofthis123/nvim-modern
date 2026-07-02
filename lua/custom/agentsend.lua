@@ -6,6 +6,8 @@
 --   <leader>aA  ref + force re-pick the target session
 --   <leader>ad  ref + LSP errors/warnings on the line/range
 --   <leader>as  ref + fenced code snippet of the line/selection
+--   <leader>ah  ref + the gitsigns hunk under cursor as a diff fence
+--   <leader>aH  same + a one-line note typed first ("here's my objection")
 --
 -- Mechanism notes (why it's done this way):
 --  * Hooks can't pre-fill an agent's composer -- they only react to events.
@@ -54,8 +56,41 @@ local function build_text(agent, ctx)
 	elseif extra.kind == "snippet" then
 		local fence = "```" .. (extra.lang ~= "" and extra.lang or "")
 		return base .. "\n" .. fence .. "\n" .. table.concat(extra.lines, "\n") .. "\n```\n"
+	elseif extra.kind == "hunk" then
+		local note = extra.note and extra.note ~= "" and ("— " .. extra.note .. "\n") or ""
+		return base .. note .. "\n```diff\n" .. table.concat(extra.lines, "\n") .. "\n```\n"
 	end
 	return base
+end
+
+-- The gitsigns hunk under the cursor, rendered as unified-diff lines.
+-- Returns the diff lines + the added-side line range for the @ref, or nil.
+local function capture_hunk()
+	local ok, gitsigns = pcall(require, "gitsigns")
+	if not ok then
+		return nil
+	end
+	local hunks = gitsigns.get_hunks(vim.api.nvim_get_current_buf())
+	if not hunks or #hunks == 0 then
+		return nil
+	end
+	local lnum = vim.api.nvim_win_get_cursor(0)[1]
+	for _, h in ipairs(hunks) do
+		local start = h.added.start
+		local fin = h.added.count > 0 and (start + h.added.count - 1) or start
+		if (lnum >= start and lnum <= fin) or (h.added.count == 0 and lnum == start) then
+			local diff = { h.head or "" }
+			for _, l in ipairs(h.removed.lines or {}) do
+				table.insert(diff, "-" .. l)
+			end
+			for _, l in ipairs(h.added.lines or {}) do
+				table.insert(diff, "+" .. l)
+			end
+			local range = h.added.count > 1 and string.format("%d-%d", start, fin) or tostring(start)
+			return { lines = diff, range = range }
+		end
+	end
+	return nil
 end
 
 -- Capture the optional extra payload synchronously (before any async picker).
@@ -226,6 +261,15 @@ function M.send(opts)
 		return
 	end
 	local ctx = { path = path, line = copy.get_current_line_or_range(), extra = capture_extra(opts) }
+	if opts.with_hunk then
+		local hunk = capture_hunk()
+		if not hunk then
+			notify("No hunk under cursor", vim.log.levels.WARN)
+			return
+		end
+		ctx.line = hunk.range
+		ctx.extra = { kind = "hunk", lines = hunk.lines }
+	end
 
 	local panes = list_agent_panes()
 	if not panes then
@@ -238,9 +282,23 @@ function M.send(opts)
 	end
 	panes = narrow_to_cwd(panes)
 
-	resolve_target(panes, opts.repick, function(pane)
-		inject(pane, ctx)
-	end)
+	local function fire()
+		resolve_target(panes, opts.repick, function(pane)
+			inject(pane, ctx)
+		end)
+	end
+
+	if opts.with_note then
+		vim.ui.input({ prompt = "note for the agent: " }, function(note)
+			if note == nil then
+				return -- cancelled
+			end
+			ctx.extra.note = note
+			fire()
+		end)
+		return
+	end
+	fire()
 end
 
 function M.setup()
@@ -261,6 +319,12 @@ function M.setup()
 	map({ "n", "v" }, "<leader>as", function()
 		M.send({ with_snippet = true })
 	end, { desc = "Agent: send ref + code snippet" })
+	map("n", "<leader>ah", function()
+		M.send({ with_hunk = true })
+	end, { desc = "Agent: send hunk under cursor" })
+	map("n", "<leader>aH", function()
+		M.send({ with_hunk = true, with_note = true })
+	end, { desc = "Agent: send hunk + note" })
 end
 
 return M
