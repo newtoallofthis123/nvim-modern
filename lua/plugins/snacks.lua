@@ -1,3 +1,45 @@
+-- Cross-repo review inbox. `gh pr list --search` (used by <leader>gv) is
+-- scoped to a single repo, so org-wide "review requested" needs `gh search
+-- prs` instead — a different command with a leaner --json shape. To keep the
+-- SAME format/preview/confirm machinery as the stock gh_pr picker (so Start
+-- Review / View diff / Submit all work identically), each hit is re-fetched
+-- through `Api.get`, which is the exact call the stock picker uses to build
+-- a fully-populated snacks.picker.gh.Item (headRefOid, statusCheckRollup,
+-- pendingReview, etc.) — not a hand-rolled subset.
+local function review_inbox_all()
+	local Api = require("snacks.gh.api")
+	Snacks.picker({
+		title = "  Review Requested (all repos)",
+		finder = function(_, _ctx)
+			return function(cb)
+				local raw = Api.cmd_sync({
+					args = { "search", "prs", "--review-requested=@me", "--state=open", "--json", "number,repository" },
+					notify = false,
+				})
+				if not raw or raw == "" then
+					return
+				end
+				local ok, entries = pcall(vim.json.decode, raw)
+				if not ok or not entries then
+					return
+				end
+				for _, entry in ipairs(entries) do
+					local repo = entry.repository and entry.repository.nameWithOwner
+					if repo then
+						local item = Api.get({ type = "pr", repo = repo, number = entry.number })
+						if item then
+							cb(item)
+						end
+					end
+				end
+			end
+		end,
+		format = "gh_format",
+		preview = "gh_preview",
+		confirm = "gh_actions",
+	})
+end
+
 return {
 	"folke/snacks.nvim",
 	priority = 1000,
@@ -434,6 +476,20 @@ _   __            __   _
 				Snacks.picker.gh_pr({ state = "all" })
 			end,
 			desc = "GitHub Pull Requests (all)",
+		},
+		{
+			"<leader>gv",
+			function()
+				-- `gh pr list --search` under the hood — repo-scoped to cwd's repo,
+				-- same finder/format/confirm as the stock gh_pr picker.
+				Snacks.picker.gh_pr({ search = "review-requested:@me" })
+			end,
+			desc = "GitHub: Review requested (this repo)",
+		},
+		{
+			"<leader>gV",
+			review_inbox_all,
+			desc = "GitHub: Review requested (all repos)",
 		},
 
 		-- Scratch buffer
