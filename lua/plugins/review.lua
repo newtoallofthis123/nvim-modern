@@ -8,6 +8,8 @@
 --   <leader>rD  :CodeDiff main...     — PR-style diff vs main/master (merge-base)
 --   <leader>rr  :Review               — open review session (staged/unstaged)
 --   <leader>rR  :Review commits       — pick commit(s) to review
+--   <leader>rb  send export to agent  — review.nvim's export, fired straight
+--                                       into the tmux agent pane as its brief
 --
 -- Once inside a review session, review.nvim's own keymaps take over:
 --   i add comment · d delete · e edit · c list all · ]n/[n jump between
@@ -57,6 +59,13 @@ return {
 		keys = {
 			{ "<leader>rr", "<cmd>Review<cr>", desc = "Review: open (staged/unstaged)" },
 			{ "<leader>rR", "<cmd>Review commits<cr>", desc = "Review: pick commit(s)" },
+			{
+				"<leader>rb",
+				function()
+					require("custom.reviewbridge").send_brief()
+				end,
+				desc = "Review: send export as agent brief",
+			},
 		},
 		opts = {},
 	},

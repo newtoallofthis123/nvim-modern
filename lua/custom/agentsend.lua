@@ -301,6 +301,24 @@ function M.send(opts)
 	fire()
 end
 
+-- Exposed for reuse by other agent-paste callers (e.g. reviewbridge.lua) that
+-- want this module's pane targeting semantics without its @-ref formatting.
+M.list_agent_panes = list_agent_panes
+M.narrow_to_cwd = narrow_to_cwd
+M.resolve_target = resolve_target
+
+-- Paste raw text into a pane (bracketed paste), bypassing build_text/format_ref.
+function M.paste_raw(pane, text)
+	vim.fn.system({ "tmux", "set-buffer", "-b", "nvim-agentref", "--", text })
+	vim.fn.system({ "tmux", "paste-buffer", "-p", "-d", "-b", "nvim-agentref", "-t", pane.id })
+	if vim.v.shell_error ~= 0 then
+		notify("Failed to paste into " .. pane.app, vim.log.levels.ERROR)
+		return false
+	end
+	notify(string.format("Sent to %s [%s]", pane.app, pane.win))
+	return true
+end
+
 function M.setup()
 	vim.api.nvim_create_user_command("AgentSendRef", function()
 		M.send()
