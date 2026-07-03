@@ -15,6 +15,25 @@ return {
 			text = "#e0def4",
 		}
 
+			-- Quiet PR awareness: "#123 check" once gh resolves it, colored by CI /
+			-- review state. Empty (and silent) until then, never blocks.
+			local prstatus = require("custom.prstatus")
+			prstatus.setup()
+
+			local pr = {
+				prstatus.text,
+				color = function()
+					local by_state = {
+						pass = c.foam,
+						approved = c.foam,
+						fail = c.love,
+						changes_requested = c.love,
+						pending = c.gold,
+					}
+					return { fg = by_state[prstatus.state()] or c.muted }
+				end,
+			}
+
 		-- "Quiet word" mode: a soft lowercase word, colored by mode (the second
 		-- hand). Everything else stays quiet; gold is the one warm accent.
 		local modes = {
@@ -64,6 +83,7 @@ return {
 				lualine_b = { mode },
 				lualine_c = {
 					{ "branch", icon = "", color = { fg = c.muted } },
+					pr,
 					{
 						"diff",
 						symbols = { added = "+", modified = "~", removed = "-" },
