@@ -99,9 +99,66 @@ function M.buffer_to_qf()
 	vim.cmd.copen()
 end
 
+-- ── Live link highlighting ───────────────────────────────────────────
+-- In markdown/gitcommit buffers, @refs render as hyperlinks: iris +
+-- underline when the path resolves, muted + strikethrough when it
+-- doesn't (dead-link detection while you type the ticket). Tokens that
+-- don't look like paths (no "/" — e.g. "@noob") are left alone.
+
+local ns = vim.api.nvim_create_namespace("refs_links")
+
+local function set_hl()
+	vim.api.nvim_set_hl(0, "RefsLink", { fg = "#c4a7e7", underline = true })
+	vim.api.nvim_set_hl(0, "RefsBroken", { fg = "#6e6a86", strikethrough = true })
+end
+
+local function highlight_buf(buf)
+	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+	for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+		local init = 1
+		while true do
+			local s, e = line:find("@[^%s]+", init)
+			if not s then
+				break
+			end
+			local token = line:sub(s, e)
+			local path = parse(token)
+			if path and path:find("/", 1, true) then
+				vim.api.nvim_buf_set_extmark(buf, ns, i - 1, s - 1, {
+					end_col = e,
+					hl_group = resolve(path) and "RefsLink" or "RefsBroken",
+				})
+			end
+			init = e + 1
+		end
+	end
+end
+
+local function attach_links(buf)
+	highlight_buf(buf)
+	vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+		buffer = buf,
+		group = vim.api.nvim_create_augroup("RefsLinks" .. buf, { clear = true }),
+		callback = function()
+			highlight_buf(buf)
+		end,
+	})
+end
+
 function M.setup()
 	vim.keymap.set("n", "gf", M.follow, { desc = "Go to file / @ref under cursor" })
 	vim.keymap.set("n", "<leader>nr", M.buffer_to_qf, { desc = "@refs in buffer → quickfix" })
+
+	set_hl()
+	local group = vim.api.nvim_create_augroup("RefsSetup", { clear = true })
+	vim.api.nvim_create_autocmd("ColorScheme", { group = group, callback = set_hl })
+	vim.api.nvim_create_autocmd("FileType", {
+		group = group,
+		pattern = { "markdown", "gitcommit" },
+		callback = function(ev)
+			attach_links(ev.buf)
+		end,
+	})
 end
 
 return M

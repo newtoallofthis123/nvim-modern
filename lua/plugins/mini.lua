@@ -15,5 +15,17 @@ return {
 				}),
 			},
 		})
+
+		-- Operators: gx{motion} twice = exchange two regions (args, blocks,
+		-- paragraphs — no register juggling); gs{motion} = sort lines/args.
+		-- The other three (replace/multiply/evaluate) stay off: gr belongs
+		-- to LSP, and unused operators are just keymap noise.
+		require("mini.operators").setup({
+			exchange = { prefix = "gx" },
+			sort = { prefix = "gs" },
+			replace = { prefix = "" },
+			multiply = { prefix = "" },
+			evaluate = { prefix = "" },
+		})
 	end,
 }
