@@ -15,12 +15,17 @@ return {
 	opts = {
 		formatters_by_ft = {
 			lua = { "stylua" },
-			python = { "isort", "black" },
+			python = { "ruff_fix", "ruff_format" },
 			javascript = { "oxfmt" },
 			typescript = { "oxfmt" },
 			javascriptreact = { "oxfmt" },
 			typescriptreact = { "oxfmt" },
-			elixir = { "expert" },
+			go = { "goimports", "gofmt" },
+			-- elixir: NOT here on purpose. Dexter formats .ex/.exs/.heex on save
+			-- via the LSP's willSaveWaitUntil hook (using your .formatter.exs +
+			-- Styler/HTMLFormatter plugins). Listing `mix` here would double up
+			-- and fight Dexter on every save. Just `:w` — Dexter formats.
+			sh = { "shfmt" },
 		},
 		default_format_opts = {
 			lsp_format = "fallback",

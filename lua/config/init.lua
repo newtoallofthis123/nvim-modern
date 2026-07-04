@@ -1,3 +1,8 @@
 require("config.options")
 require("config.autocmds")
 require("config.keymaps")
+require("custom.gems")
+require("custom.satchel")
+require("custom.justrun")
+require("custom.quickfix")
+require("custom.refs").setup()

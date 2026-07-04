@@ -14,6 +14,32 @@ keymap.set("n", "<C-u>", "<C-u>zz", { noremap = true })
 
 keymap.set("n", "<leader>ra", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left>]])
 
+-- Change the word under the cursor, then press `.` to repeat that same change
+-- on the next match (and the next…). Surgical replace without :%s.
+keymap.set("n", "<leader>cn", "*``cgn", { desc = "Change word → next match (dot-repeat)" })
+keymap.set("n", "<leader>cN", "*``cgN", { desc = "Change word → prev match (dot-repeat)" })
+
+-- Move the visual selection up/down (and reindent into its new context)
+keymap.set("x", "J", ":m '>+1<CR>gv=gv", { desc = "Move selection down" })
+keymap.set("x", "K", ":m '<-2<CR>gv=gv", { desc = "Move selection up" })
+
+-- Keep the selection after indenting so < / > repeat
+keymap.set("x", "<", "<gv")
+keymap.set("x", ">", ">gv")
+
+-- Paste over a selection without clobbering what you yanked
+keymap.set("x", "p", [["_dP]], { desc = "Paste without losing register" })
+
+-- Jump between git conflict markers (centered)
+keymap.set("n", "]x", [[/^\(<<<<<<<\|=======\|>>>>>>>\)<CR>zz]], { desc = "Next conflict marker" })
+keymap.set("n", "[x", [[?^\(<<<<<<<\|=======\|>>>>>>>\)<CR>zz]], { desc = "Prev conflict marker" })
+
+-- Native undo-tree visualizer (ships with nvim 0.12; fills the time-machine hole)
+keymap.set("n", "<leader>U", function()
+	vim.cmd("packadd nvim.undotree")
+	vim.cmd("Undotree")
+end, { desc = "Undo tree" })
+
 keymap.set("n", "<leader>bn", ":bn<CR>", { noremap = true })
 keymap.set("n", "<leader>bp", ":bp<CR>", { noremap = true })
 keymap.set("n", "<leader>bb", ":ls<CR>:b ", { noremap = true, desc = "List buffers and switch" })
@@ -71,9 +97,25 @@ keymap.set("n", "<leader>w<Up>", "<C-w>k", { desc = "Go to window above" })
 keymap.set("n", "<leader>w<Right>", "<C-w>l", { desc = "Go to right window" })
 
 -- Window resize/maximize
-keymap.set("n", "<leader>wm", "<C-w>_<C-w>|", { desc = "Maximize current split" })
+-- Zoom: maximize this split; press again to restore the EXACT prior layout
+local zoom_restore
+keymap.set("n", "<leader>wm", function()
+	if zoom_restore then
+		vim.cmd(zoom_restore)
+		zoom_restore = nil
+	elseif vim.fn.winnr("$") > 1 then
+		zoom_restore = vim.fn.winrestcmd()
+		vim.cmd("wincmd _ | wincmd |")
+	end
+end, { desc = "Zoom split (maximize/restore)" })
 keymap.set("n", "<leader>we", "<C-w>=", { desc = "Equalize split sizes" })
 keymap.set("n", "<leader>wo", "<C-w>o", { desc = "Close all other splits" })
+keymap.set("n", "<leader>wt", "<C-w>T", { desc = "Break split into a new tab" })
+
+-- The flip family: jump to the OTHER one, no picker (cousins of <C-o>)
+keymap.set("n", "<BS>", "<C-^>", { desc = "Flip to alternate file" })
+keymap.set("n", "<C-w>p", "<C-w>p", { desc = "Flip to last window" })
+keymap.set("n", "g<Tab>", "g<Tab>", { desc = "Flip to last tab" })
 
 keymap.set("n", "<leader>vd", vim.diagnostic.open_float, { noremap = true, desc = "Open diagnostic float" })
 
@@ -128,15 +170,8 @@ keymap.set("n", "<leader>vs", function()
 	vim.keymap.set("n", "q", ":q<CR>", { buffer = buf, noremap = true, silent = true })
 end, { noremap = true, desc = "Open diagnostics in split" })
 
--- Git commands
-vim.keymap.set("n", "<leader>gd", function()
-	vim.fn.setqflist({}, "r", {
-		title = "Git Diff",
-		lines = vim.fn.systemlist("git jump --stdout diff"),
-	})
-	vim.cmd("copen")
-end, { desc = "View git diff in quickfix" })
-
+-- Git commands (note: <leader>gd is now Diffview review; PR/issue pickers
+-- live under snacks; lazygit on <leader>gl)
 vim.keymap.set("n", "<leader>gmc", function()
 	vim.fn.setqflist({}, "r", {
 		title = "Git Merge Conflicts",
@@ -144,10 +179,6 @@ vim.keymap.set("n", "<leader>gmc", function()
 	})
 	vim.cmd("copen")
 end, { desc = "View git merge conflicts in quickfix" })
-
-vim.keymap.set("n", "<leader>gp", function()
-	vim.fn.system("gh pr view --web")
-end, { desc = "Open PR in web browser" })
 
 vim.keymap.set("n", "<leader>gr", function()
 	vim.fn.system("gh repo view --web")

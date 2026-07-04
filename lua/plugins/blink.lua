@@ -2,11 +2,11 @@ return {
 	"saghen/blink.cmp",
 	dependencies = {
 		"rafamadriz/friendly-snippets",
-		"fang2hou/blink-copilot",
 		"saghen/blink.compat",
 		"moyiz/blink-emoji.nvim",
 	},
 	version = "1.*",
+	event = { "InsertEnter", "CmdlineEnter" },
 	opts = {
 		keymap = {
 			preset = "default",
@@ -49,14 +49,8 @@ return {
 		},
 
 		sources = {
-			default = { "fuzzy-path", "copilot", "lsp", "snippets", "buffer", "emoji", "path" },
+			default = { "fuzzy-path", "lsp", "snippets", "buffer", "emoji", "path" },
 			providers = {
-				copilot = {
-					name = "copilot",
-					module = "blink-copilot",
-					score_offset = 100,
-					async = true,
-				},
 				emoji = {
 					module = "blink-emoji",
 					name = "Emoji",

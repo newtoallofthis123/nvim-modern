@@ -55,29 +55,138 @@ vim.api.nvim_create_autocmd("BufRead", {
 	end,
 })
 
--- show cursorline only in active window enable
+-- show cursorline only in the active window (the "you are here" marker)
+local active_cursorline = vim.api.nvim_create_augroup("active_cursorline", { clear = true })
 vim.api.nvim_create_autocmd({ "WinEnter", "BufEnter" }, {
-	group = vim.api.nvim_create_augroup("active_cursorline", { clear = true }),
+	group = active_cursorline,
 	callback = function()
-		vim.opt_local.cursorline = true
+		vim.wo.cursorline = true
 	end,
 })
---
--- vim.api.nvim_create_autocmd("LspProgress", {
---     callback = function(ev)
---         local value = ev.data.params.value or {}
---         if not value.kind then return end
---
---         local status = value.kind == "end" and 0 or 1
---         local percent = value.percentage or 0
---
---         local osc_seq = string.format("\27]9;4;%d;%d\a", status, percent)
---
---         if os.getenv("TMUX") then
---             osc_seq = string.format("\27Ptmux;\27%s\27\\", osc_seq)
---         end
---
---         io.stdout:write(osc_seq)
---         io.stdout:flush()
---     end,
--- })
+vim.api.nvim_create_autocmd("WinLeave", {
+	group = active_cursorline,
+	callback = function()
+		vim.wo.cursorline = false
+	end,
+})
+
+-- LSP indexing pulse → tmux pane border. While any language server is busy
+-- (begin..end progress) the active pane border glows gold, then resets the
+-- moment all servers go idle. Your editor talking to your multiplexer.
+if vim.env.TMUX and vim.env.TMUX_PANE then
+	local pulse = vim.api.nvim_create_augroup("tmux_lsp_pulse", { clear = true })
+	-- Target OUR window explicitly: bare -w acts on the window the user is
+	-- currently VIEWING, not the one nvim runs in (bit us with @nvim too).
+	local pane = vim.env.TMUX_PANE
+	-- Remember the theme's own border colour so we restore it, not "default".
+	local rest = vim.fn.system({ "tmux", "show-options", "-t", pane, "-wv", "pane-active-border-style" })
+	rest = (rest:gsub("%s+$", ""))
+	if rest == "" then
+		rest = "default"
+	end
+	local active = 0
+	local function border(on)
+		vim.system({ "tmux", "set", "-w", "-t", pane, "pane-active-border-style", on and "fg=#f6c177" or rest })
+	end
+	vim.api.nvim_create_autocmd("LspProgress", {
+		group = pulse,
+		callback = function(ev)
+			local kind = vim.tbl_get(ev, "data", "params", "value", "kind")
+			if kind == "begin" then
+				active = active + 1
+				border(true)
+			elseif kind == "end" then
+				active = math.max(0, active - 1)
+				if active == 0 then
+					border(false)
+				end
+			end
+		end,
+	})
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = pulse,
+		callback = function()
+			border(false)
+		end,
+	})
+end
+
+-- Auto-reload files changed underneath us — the LLM writes in another pane,
+-- nvim refreshes the buffer when you focus/enter/idle on it, and says so.
+vim.o.autoread = true
+local autoreload = vim.api.nvim_create_augroup("auto_reload", { clear = true })
+vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
+	group = autoreload,
+	callback = function()
+		-- checktime errors inside the cmdline window; guard it
+		if vim.fn.mode() ~= "c" and vim.fn.getcmdwintype() == "" then
+			vim.cmd("checktime")
+		end
+	end,
+})
+vim.api.nvim_create_autocmd("FileChangedShellPost", {
+	group = autoreload,
+	callback = function()
+		vim.notify("Reloaded — file changed on disk", vim.log.levels.INFO)
+	end,
+})
+
+-- Re-diff an open Diffview when you focus nvim (e.g. tab back from the agent
+-- pane). Diffview computes its diff once on open and doesn't watch the working
+-- tree, so the agent's edits won't show until it's refreshed. pcall-guarded:
+-- before Diffview is ever opened the module isn't on the rtp, so this no-ops.
+vim.api.nvim_create_autocmd("FocusGained", {
+	group = autoreload,
+	callback = function()
+		local ok, lib = pcall(require, "diffview.lib")
+		if ok and next(lib.views) ~= nil then
+			pcall(vim.cmd, "DiffviewRefresh")
+		end
+	end,
+})
+
+-- Reflow width for prose so gq / gw wrap cleanly: markdown 80, commits 72
+vim.api.nvim_create_autocmd("FileType", {
+	group = vim.api.nvim_create_augroup("prose_textwidth", { clear = true }),
+	pattern = { "markdown", "gitcommit", "text" },
+	callback = function(ev)
+		vim.opt_local.textwidth = ev.match == "gitcommit" and 72 or 80
+	end,
+})
+
+-- Flash the line when you drop a named mark (0.12 MarkSet event)
+local mark_ns = vim.api.nvim_create_namespace("mark_flash")
+vim.api.nvim_create_autocmd("MarkSet", {
+	group = vim.api.nvim_create_augroup("mark_flash", { clear = true }),
+	callback = function(ev)
+		if not (ev.match or ""):match("^%a$") then
+			return
+		end
+		local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+		vim.hl.range(0, mark_ns, "Visual", { row, 0 }, { row, -1 }, { timeout = 200 })
+	end,
+})
+
+-- Publish nvim's RPC socket to its tmux WINDOW so sibling panes can drive it
+-- (the agent / a just recipe / scripts can `nvim --server "$NVIM" --remote …`).
+-- A zsh precmd exports $NVIM from this @nvim option. Window-scoped: each window
+-- advertises its own nvim. Cleared on exit.
+if vim.env.TMUX and vim.env.TMUX_PANE then
+	local grp = vim.api.nvim_create_augroup("nvim_socket_publish", { clear = true })
+	-- -t is load-bearing: bare -w targets the window the user is WATCHING,
+	-- not the one nvim runs in — spawned/background nvims stamped the wrong
+	-- window (or the right one only by luck).
+	local pane = vim.env.TMUX_PANE
+	vim.api.nvim_create_autocmd("VimEnter", {
+		group = grp,
+		callback = function()
+			vim.system({ "tmux", "set-option", "-w", "-t", pane, "@nvim", vim.v.servername })
+		end,
+	})
+	vim.api.nvim_create_autocmd("VimLeavePre", {
+		group = grp,
+		callback = function()
+			vim.system({ "tmux", "set-option", "-uw", "-t", pane, "@nvim" })
+		end,
+	})
+end

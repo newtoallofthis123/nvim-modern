@@ -32,4 +32,20 @@ require("lazy").setup({
 	install = { colorscheme = { "habamax" } },
 	-- automatically check for plugin updates
 	checker = { enabled = false },
+	-- Don't load builtin Vimscript plugins we never use
+	performance = {
+		rtp = {
+			disabled_plugins = {
+				"gzip",
+				-- matchit (extended % for if/end, do/end, tags) and matchparen
+				-- (highlight the matching bracket) stay ENABLED — disabling them
+				-- broke `%`.
+				"netrwPlugin",
+				"tarPlugin",
+				"tohtml",
+				"tutor",
+				"zipPlugin",
+			},
+		},
+	},
 })

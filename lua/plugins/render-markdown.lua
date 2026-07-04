@@ -1,5 +1,6 @@
 return {
 	"MeanderingProgrammer/render-markdown.nvim",
+	ft = { "markdown" },
 	dependencies = { "nvim-treesitter/nvim-treesitter", "nvim-tree/nvim-web-devicons" },
 	opts = {
 		-- Render in normal and visual modes only
@@ -128,5 +129,4 @@ return {
 		-- Quote styling
 		vim.api.nvim_set_hl(0, "RenderMarkdownQuote", { fg = "#908caa" })
 	end,
-	enabled = false,
 }
