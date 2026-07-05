@@ -37,7 +37,8 @@ return {
 							local filename = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":t")
 							local ok, devicons = pcall(require, "nvim-web-devicons")
 							if ok and filename ~= "" then
-								local file_icon = devicons.get_icon(filename, vim.fn.fnamemodify(filename, ":e"), { default = true })
+								local file_icon =
+									devicons.get_icon(filename, vim.fn.fnamemodify(filename, ":e"), { default = true })
 								icon = (file_icon or "") .. " "
 							end
 							if vim.api.nvim_get_option_value("modified", { buf = bufnr }) then

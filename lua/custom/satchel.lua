@@ -1,14 +1,16 @@
--- satchel — a ticket and its context bucket are the SAME thing.
+-- satchel — buckets of @refs; a ticket is an OPTIONAL file linked to a bucket.
 --
--- <leader>sn names one → creates a markdown ticket (<ddmmyyyy>_<name>.md) AND a
--- bucket of @refs, linked. Toss refs while browsing code; <leader>sg jumps to
--- the ticket and dumps them in. Refs use @path#L40-58; selections carry a
+-- <leader>sn names a bucket. Toss refs into it while browsing code. When (if)
+-- the bucket earns a writeup, <leader>sl links it to a markdown ticket file
+-- (default <ddmmyyyy>_<name>.md) and the ticket verbs (sT/sA*/sg) work; they
+-- offer the link on first use. <leader>sq pours the bucket into the quickfix
+-- list (composes with :Quarry). Refs use @path#L40-58; selections carry a
 -- fenced code block. Session-only (v1). Pickers reuse snacks; fmt reuses copy.
 local copy = require("custom.copy")
 
 local M = {}
 
--- state: M.buckets[name] = { items = {item,...}, ticket = "<file>.md", bufnr }
+-- state: M.buckets[name] = { items = {item,...}, ticket = "<file>.md"|nil, bufnr }
 M.buckets = {}
 M.active = nil
 
@@ -149,12 +151,39 @@ local function pick_list(title, items, on_confirm, multi)
 	})
 end
 
--- ticket = bucket: create + open -------------------------------------------
+-- buckets are fundamental; tickets are linked later ---------------------------
 local function make_bucket(name)
-	local file = ("%s_%s.md"):format(vim.fn.strftime("%d%m%Y"), (name:gsub("%s+", "-")))
-	M.buckets[name] = { items = {}, ticket = file, bufnr = nil }
+	M.buckets[name] = { items = {}, ticket = nil, bufnr = nil }
 	M.set_active(name)
-	return file
+end
+
+local function default_ticket(name)
+	return ("%s_%s.md"):format(vim.fn.strftime("%d%m%Y"), (name:gsub("%s+", "-")))
+end
+
+-- <leader>sl : link the bucket to a ticket file (new by convention, or any
+-- existing path you type over the prefill)
+function M.link_ticket(name, after)
+	local b = M.buckets[name]
+	vim.ui.input({ prompt = "Ticket file: ", default = default_ticket(name), completion = "file" }, function(file)
+		if not file or file == "" then
+			return
+		end
+		b.ticket = file
+		b.bufnr = nil
+		vim.notify("📝 " .. name .. "  →  " .. file)
+		if after then
+			after(name)
+		end
+	end)
+end
+
+-- run cb only with a ticket linked; offer the link on first use
+local function with_ticket(name, cb)
+	if M.buckets[name].ticket then
+		return cb(name)
+	end
+	M.link_ticket(name, cb)
 end
 
 -- ensure the ticket's buffer exists (created hidden if needed); no focus change
@@ -190,6 +219,10 @@ function M.open_ticket(name)
 	if not b then
 		return
 	end
+	if not b.ticket then
+		vim.notify("no ticket linked to " .. name .. " — <leader>sl", vim.log.levels.WARN)
+		return
+	end
 	local buf = ensure_ticket_buf(name)
 	-- already open in a window (any tab)? jump to it; else new tab.
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -202,26 +235,25 @@ function M.open_ticket(name)
 	vim.cmd("buffer " .. buf)
 end
 
--- <leader>sn : name → new ticket+bucket, opens the ticket
-function M.new_ticket()
-	vim.ui.input({ prompt = "Ticket name: " }, function(name)
+-- <leader>sn : name → new bucket (no file, nothing opens; link later with sl)
+function M.new_bucket()
+	vim.ui.input({ prompt = "Bucket name: " }, function(name)
 		if not name or name == "" then
 			return
 		end
-		local file = make_bucket(name)
-		M.open_ticket(name)
-		vim.notify("🪣📝 " .. name .. "  →  " .. file)
+		make_bucket(name)
+		vim.notify("🪣 " .. name)
 	end)
 end
 
 -- create a bucket WITHOUT stealing focus (used mid-toss from a code buffer)
 local function prompt_make(after)
-	vim.ui.input({ prompt = "Ticket name: " }, function(name)
+	vim.ui.input({ prompt = "Bucket name: " }, function(name)
 		if not name or name == "" then
 			return
 		end
-		local file = make_bucket(name)
-		vim.notify("🪣 " .. name .. "  →  " .. file)
+		make_bucket(name)
+		vim.notify("🪣 " .. name)
 		if after then
 			after(name)
 		end
@@ -231,23 +263,25 @@ end
 function M.enter_bucket()
 	local names = vim.tbl_keys(M.buckets)
 	if #names == 0 then
-		return M.new_ticket()
+		return M.new_bucket()
 	end
 	local items = {}
 	for _, n in ipairs(names) do
 		items[#items + 1] = { text = n, name = n }
 	end
-	items[#items + 1] = { text = "＋ new ticket…", new = true }
+	items[#items + 1] = { text = "＋ new bucket…", new = true }
 	pick_list("Enter bucket", items, function(sel)
 		local it = sel and sel[1]
 		if not it then
 			return
 		end
 		if it.new then
-			M.new_ticket()
+			M.new_bucket()
 		else
 			M.set_active(it.name)
-			M.open_ticket(it.name)
+			if M.buckets[it.name].ticket then
+				M.open_ticket(it.name)
+			end
 			vim.notify("🪣 " .. it.name)
 		end
 	end)
@@ -275,7 +309,7 @@ function M.with_bucket(cb)
 	for _, n in ipairs(names) do
 		items[#items + 1] = { text = n, name = n }
 	end
-	items[#items + 1] = { text = "＋ new ticket…", new = true }
+	items[#items + 1] = { text = "＋ new bucket…", new = true }
 	pick_list("Toss into", items, function(sel)
 		local it = sel and sel[1]
 		if not it then
@@ -297,7 +331,7 @@ function M.with_existing(cb)
 	end
 	local names = vim.tbl_keys(M.buckets)
 	if #names == 0 then
-		vim.notify("no tickets yet — <leader>sn", vim.log.levels.WARN)
+		im.notify("no buckets yet — <leader>sn", vim.log.levels.WARN)
 		return
 	end
 	local items = {}
@@ -369,7 +403,10 @@ local function node_item(scope)
 		end
 		local region = ai.find_textobject("a", scope)
 		if not region then
-			vim.notify("no " .. (SCOPE_KIND[scope] ~= "" and SCOPE_KIND[scope] or scope) .. " under cursor", vim.log.levels.INFO)
+			vim.notify(
+				"no " .. (SCOPE_KIND[scope] ~= "" and SCOPE_KIND[scope] or scope) .. " under cursor",
+				vim.log.levels.INFO
+			)
 			return
 		end
 		lstart, lend = region.from.line, region.to.line
@@ -397,8 +434,10 @@ function M.toss_node(scope, to_ticket)
 	end
 	M.with_bucket(function(name)
 		if to_ticket then
-			append_to_ticket(name, item)
-			vim.notify("📝 " .. name .. " ← " .. item.ref)
+			with_ticket(name, function()
+				append_to_ticket(name, item)
+				vim.notify("📝 " .. name .. " ← " .. item.ref)
+			end)
 		else
 			add_item(name, item)
 			toast(name)
@@ -415,8 +454,10 @@ function M.toss_file_to_ticket()
 		return
 	end
 	M.with_bucket(function(name)
-		append_to_ticket(name, { ref = "@" .. r })
-		vim.notify("📝 " .. name .. " ← @" .. r)
+		with_ticket(name, function()
+			append_to_ticket(name, { ref = "@" .. r })
+			vim.notify("📝 " .. name .. " ← @" .. r)
+		end)
 	end)
 end
 
@@ -434,8 +475,10 @@ function M.toss_sel_to_ticket()
 	local ft = vim.bo.filetype
 	vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
 	M.with_bucket(function(name)
-		append_to_ticket(name, { ref = ref, code = table.concat(lines, "\n"), ft = ft })
-		vim.notify("📝 " .. name .. " ← " .. ref)
+		with_ticket(name, function()
+			append_to_ticket(name, { ref = ref, code = table.concat(lines, "\n"), ft = ft })
+			vim.notify("📝 " .. name .. " ← " .. ref)
+		end)
 	end)
 end
 
@@ -493,9 +536,31 @@ end
 -- <leader>sg : go to the ticket buffer and dump the whole bucket at the end
 function M.go_dump()
 	M.with_existing(function(name)
-		M.open_ticket(name)
-		vim.cmd("normal! G")
-		insert_all(name)
+		with_ticket(name, function()
+			M.open_ticket(name)
+			vim.cmd("normal! G")
+			insert_all(name)
+		end)
+	end)
+end
+
+-- <leader>sq : pour the bucket into the quickfix list (curate with :Quarry)
+function M.to_quickfix()
+	M.with_existing(function(name)
+		local items = M.buckets[name].items
+		if #items == 0 then
+			vim.notify("bucket is empty")
+			return
+		end
+		local qf = {}
+		for _, it in ipairs(items) do
+			local path, lnum = it.ref:match("^@([^#]+)#L(%d+)")
+			path = path or it.ref:match("^@([^%s]+)")
+			qf[#qf + 1] = { filename = path, lnum = tonumber(lnum) or 1, text = it.ref }
+		end
+		vim.fn.setqflist({}, " ", { items = qf, title = "satchel: " .. name })
+		vim.cmd("copen")
+		vim.notify(("🪣→qf %s (%d)"):format(name, #qf))
 	end)
 end
 
@@ -558,9 +623,15 @@ end
 function M.setup()
 	local map = vim.keymap.set
 	local nx = { "n", "x" }
-	map(nx, "<leader>sn", M.new_ticket, { desc = "Satchel: new ticket+bucket" })
-	map(nx, "<leader>se", M.enter_bucket, { desc = "Satchel: enter ticket" })
-	map(nx, "<leader>sx", M.leave_bucket, { desc = "Satchel: leave ticket" })
+	map(nx, "<leader>sn", M.new_bucket, { desc = "Satchel: new bucket" })
+	map(nx, "<leader>sl", function()
+		M.with_existing(function(name)
+			M.link_ticket(name)
+		end)
+	end, { desc = "Satchel: link ticket file" })
+	map(nx, "<leader>se", M.enter_bucket, { desc = "Satchel: enter bucket" })
+	map(nx, "<leader>sx", M.leave_bucket, { desc = "Satchel: leave bucket" })
+	map(nx, "<leader>sq", M.to_quickfix, { desc = "Satchel: bucket → quickfix" })
 	-- toss is the one that differs by mode: file in normal, selection in visual
 	map("n", "<leader>st", M.toss_file, { desc = "Satchel: toss current file" })
 	map("x", "<leader>st", M.toss_selection, { desc = "Satchel: toss selection" })

@@ -1,11 +1,14 @@
--- embers.lua — lines you just touched glow in the sign column, then cool.
+-- embers.lua — lines you just touched glow with a faint warm bg, then cool.
 --
--- Editing leaves an ember: a "▎" in the sign column, bright amber the moment
--- you change a line, cooling through six steps to a dull grey over ~15 minutes
--- before it dies. A glance tells you what's fresh in a buffer without a diff.
+-- Editing leaves an ember: the whole line gets a barely-there amber wash the
+-- moment you change it, cooling through six steps to almost-nothing over ~15
+-- minutes before it dies. A glance tells you what's fresh in a buffer without
+-- a diff. (The line background, not the gutter: gitsigns owns the sign AND
+-- number columns in this config, so embers lives where nothing else does.)
+-- Absolute colours, no blending — works over a transparent background.
 -- Attaches to real file buffers on first enter; one global timer walks every
--- live mark every 30s and reassigns its colour by age. Sign priority 5, so
--- gitsigns (6) still wins the column when both land on a line.
+-- live mark every 30s and reassigns its colour by age. Bulk changes (formatter
+-- rewrites, external reloads) are NOT embers — only human-sized edits burn.
 --
 --   :Embers clear    wipe every ember everywhere
 --   :Embers toggle   enable / disable the whole plugin
@@ -24,9 +27,12 @@ local STEPS = 6
 local TICK_MS = 30 * 1000
 local COOLDOWN_MS = 15 * 60 * 1000
 local MAX_LINES = 10000
+local BULK_LINES = 100 -- a single change touching more than this isn't you typing
 
--- six-step ramp: hot amber → dull grey, tuned for transparent / rose-pine.
-local RAMP = { "#e0a458", "#cf9a5f", "#a98b6a", "#877d72", "#6b6a72", "#4d4a55" }
+-- six-step bg ramp: a whisper of warmth → nothing. Deliberately near-black:
+-- over a dark transparent base the eye catches the temperature shift in the
+-- periphery without ever reading it as a "highlighted line".
+local RAMP = { "#211711", "#1c140f", "#17110d", "#120e0b", "#0d0a08", "#080706" }
 
 local function now()
 	return vim.uv.now()
@@ -34,17 +40,16 @@ end
 
 -- highlight groups ----------------------------------------------------------
 local function set_hl()
-	for i, fg in ipairs(RAMP) do
-		vim.api.nvim_set_hl(0, "Embers" .. i, { fg = fg })
+	for i, bg in ipairs(RAMP) do
+		vim.api.nvim_set_hl(0, "Embers" .. i, { bg = bg })
 	end
 end
 
 -- attach / marks ------------------------------------------------------------
 local function place(buf, line)
 	local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns, line, 0, {
-		sign_text = "▎",
-		sign_hl_group = "Embers1",
-		priority = 5,
+		line_hl_group = "Embers1",
+		priority = 1, -- under visual selection, search, cursorline
 	})
 	if ok then
 		marks[buf] = marks[buf] or {}
@@ -53,24 +58,32 @@ local function place(buf, line)
 end
 
 -- collapse a changed row range into one ember per line, resetting the clock.
+-- Only the marks inside the range are queried — never the whole buffer.
 local function touch(buf, first, last)
 	local existing = {}
-	if marks[buf] then
-		for id in pairs(marks[buf]) do
-			local ok, pos = pcall(vim.api.nvim_buf_get_extmark_by_id, buf, ns, id, {})
-			if ok and pos[1] then
-				existing[pos[1]] = id
-			end
-		end
+	local in_range = vim.api.nvim_buf_get_extmarks(buf, ns, { first, 0 }, { math.max(last - 1, first), -1 }, {})
+	for _, m in ipairs(in_range) do
+		existing[m[2]] = m[1] -- row → id
 	end
 	for line = first, last - 1 do
 		local id = existing[line]
-		if id then
+		if id and marks[buf] and marks[buf][id] then
 			marks[buf][id] = now()
 		else
 			place(buf, line)
 		end
 	end
+end
+
+-- pending edits per buffer, coalesced into one scheduled flush per burst
+local pending = {}
+
+local function should_attach(buf)
+	local name = vim.api.nvim_buf_get_name(buf)
+	return vim.bo[buf].buftype == ""
+		and name ~= ""
+		and not name:match("^%w+://") -- oil://, fugitive://, fossick:// etc.
+		and vim.api.nvim_buf_line_count(buf) <= MAX_LINES
 end
 
 local function attach(buf)
@@ -84,23 +97,49 @@ local function attach(buf)
 				attached[b] = nil
 				return true -- detach
 			end
-			-- defer: extmarks have already shifted for this edit by next tick.
+			-- plugins like oil set buftype AFTER BufEnter; bail out late too
+			if not should_attach(b) then
+				attached[b] = nil
+				pending[b] = nil
+				vim.schedule(function()
+					if vim.api.nvim_buf_is_valid(b) then
+						pcall(vim.api.nvim_buf_clear_namespace, b, ns, 0, -1)
+					end
+					marks[b] = nil
+				end)
+				return true -- detach
+			end
+			if last - first > BULK_LINES then
+				return -- formatter / generated rewrite, not an edit
+			end
+			-- coalesce: extend the pending range; only the first event schedules
+			local p = pending[b]
+			if p then
+				p[1], p[2] = math.min(p[1], first), math.max(p[2], last)
+				return
+			end
+			pending[b] = { first, last }
 			vim.schedule(function()
-				if vim.api.nvim_buf_is_valid(b) then
-					touch(b, first, last)
+				local range = pending[b]
+				pending[b] = nil
+				if range and vim.api.nvim_buf_is_valid(b) then
+					if range[2] - range[1] <= BULK_LINES then
+						touch(b, range[1], range[2])
+					end
 				end
 			end)
 		end,
+		on_reload = function(_, b)
+			-- external change (checktime etc.): every old mark is meaningless
+			marks[b] = nil
+			pending[b] = nil
+			pcall(vim.api.nvim_buf_clear_namespace, b, ns, 0, -1)
+		end,
 		on_detach = function(_, b)
 			attached[b] = nil
+			pending[b] = nil
 		end,
 	})
-end
-
-local function should_attach(buf)
-	return vim.bo[buf].buftype == ""
-		and vim.api.nvim_buf_get_name(buf) ~= ""
-		and vim.api.nvim_buf_line_count(buf) <= MAX_LINES
 end
 
 -- cooling -------------------------------------------------------------------
@@ -125,9 +164,8 @@ local function tick()
 					if ok and pos[1] then
 						pcall(vim.api.nvim_buf_set_extmark, buf, ns, pos[1], 0, {
 							id = id,
-							sign_text = "▎",
-							sign_hl_group = "Embers" .. step_for(age),
-							priority = 5,
+							line_hl_group = "Embers" .. step_for(age),
+							priority = 1,
 						})
 					else
 						ids[id] = nil -- extmark vanished (line deleted)
