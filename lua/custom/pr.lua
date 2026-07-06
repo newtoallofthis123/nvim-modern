@@ -3,8 +3,10 @@
 --
 -- Folds in what used to be prstatus.lua (statusline text/state) and
 -- prcomments.lua (inline review comments), and adds the action layer:
---   <leader>P   central float: current branch's PR · mine · review-requested
---                 (one `gh pr status` call — never the slow `gh pr list`)
+--   <leader>Po  status of THIS branch's PR — from cache, instant, no network
+--   <leader>Pl  list float: current · mine · review-requested (one `gh pr
+--                 status` call — the explicit, opt-in list; never `gh pr list`)
+--   <leader>Pg  go to any PR by number / #n / github url → its status
 --   <leader>gt  toggle inline PR review comments (ambient, read-only)
 --
 -- Inside the float, acting on the PR under the cursor:
@@ -54,35 +56,48 @@ local function repo_from_url(url)
 end
 
 -- ── statusline render (lifted from prstatus) ──────────────────────────────
--- statusCheckRollup + reviewDecision -> "#<n> <ci>[ <review>]" + color bucket
-local function render(data)
-	local ci, ci_state = "~", "pending"
+-- statusCheckRollup -> symbol, word, color bucket
+local function ci_of(data)
 	local rollup = data.statusCheckRollup
-	if rollup and #rollup > 0 then
-		local any_failure, any_pending = false, false
-		for _, check in ipairs(rollup) do
-			if check.status ~= "COMPLETED" then
-				any_pending = true
-			elseif not (check.conclusion == "SUCCESS" or check.conclusion == "NEUTRAL" or check.conclusion == "SKIPPED") then
-				any_failure = true
-			end
-		end
-		if any_failure then
-			ci, ci_state = "✗", "fail"
-		elseif any_pending then
-			ci, ci_state = "~", "pending"
-		else
-			ci, ci_state = "✓", "pass"
+	if not rollup or #rollup == 0 then
+		return "~", "no checks", "pending"
+	end
+	local any_failure, any_pending = false, false
+	for _, check in ipairs(rollup) do
+		if check.status ~= "COMPLETED" then
+			any_pending = true
+		elseif not (check.conclusion == "SUCCESS" or check.conclusion == "NEUTRAL" or check.conclusion == "SKIPPED") then
+			any_failure = true
 		end
 	end
+	if any_failure then
+		return "✗", "failing", "fail"
+	elseif any_pending then
+		return "~", "pending", "pending"
+	end
+	return "✓", "passing", "pass"
+end
 
+local function review_label(data)
+	if data.reviewDecision == "APPROVED" then
+		return "✓ approved"
+	elseif data.reviewDecision == "CHANGES_REQUESTED" then
+		return "● changes requested"
+	elseif data.reviewDecision == "REVIEW_REQUIRED" then
+		return "review required"
+	end
+	return "—"
+end
+
+-- statusCheckRollup + reviewDecision -> "#<n> <ci>[ <review>]" + color bucket
+local function render(data)
+	local ci, _, ci_state = ci_of(data)
 	local review, state = "", ci_state
 	if data.reviewDecision == "CHANGES_REQUESTED" then
 		review, state = " ●", "changes_requested"
 	elseif data.reviewDecision == "APPROVED" then
 		review, state = " ✓", "approved"
 	end
-
 	return ("#%d %s%s"):format(data.number, ci, review), state
 end
 
@@ -421,7 +436,8 @@ local function build_lines(status)
 	return lines, rows
 end
 
-local function open_float(lines, rows)
+-- centered rounded float (matches Snacks.git.blame_line's feel); q/⎋ close.
+local function make_float(lines, title)
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 	vim.bo[buf].modifiable = false
@@ -437,56 +453,86 @@ local function open_float(lines, rows)
 		col = math.floor((vim.o.columns - width) / 2),
 		style = "minimal",
 		border = "rounded",
-		title = "  Pull Requests ",
+		title = title,
 		title_pos = "center",
 	})
 	vim.wo[win].cursorline = true
 
-	local function row_under_cursor()
-		return rows[vim.api.nvim_win_get_cursor(win)[1]]
+	local function close()
+		if vim.api.nvim_win_is_valid(win) then
+			vim.api.nvim_win_close(win, true)
+		end
 	end
+	for _, k in ipairs({ "q", "<esc>" }) do
+		vim.keymap.set("n", k, close, { buffer = buf, nowait = true, silent = true })
+	end
+	return buf, win, close
+end
+
+-- action keys shared by both floats: fn is called with the PR number + base.
+local function bind_actions(buf, close, get)
+	local kopts = { buffer = buf, nowait = true, silent = true }
 	local function act(fn)
 		return function()
-			local r = row_under_cursor()
-			if r then
-				vim.api.nvim_win_close(win, true)
-				fn(r)
+			local n, base = get()
+			if n then
+				close()
+				fn(n, base)
 			end
 		end
 	end
-	local kopts = { buffer = buf, nowait = true, silent = true }
-	vim.keymap.set("n", "q", function()
-		vim.api.nvim_win_close(win, true)
-	end, kopts)
-	vim.keymap.set("n", "<esc>", function()
-		vim.api.nvim_win_close(win, true)
-	end, kopts)
-	vim.keymap.set("n", "<cr>", act(function(r)
-		M.diff(r.n, r.base)
+	vim.keymap.set("n", "<cr>", act(M.diff), kopts)
+	vim.keymap.set("n", "d", act(M.diff), kopts)
+	vim.keymap.set("n", "a", act(function(n)
+		M.approve(n)
 	end), kopts)
-	vim.keymap.set("n", "d", act(function(r)
-		M.diff(r.n, r.base)
+	vim.keymap.set("n", "r", act(function(n)
+		M.request_reviewers(n)
 	end), kopts)
-	vim.keymap.set("n", "a", act(function(r)
-		M.approve(r.n)
+	vim.keymap.set("n", "m", act(function(n)
+		M.queue(n)
 	end), kopts)
-	vim.keymap.set("n", "r", act(function(r)
-		M.request_reviewers(r.n)
+	vim.keymap.set("n", "o", act(function(n)
+		M.open_web(n)
 	end), kopts)
-	vim.keymap.set("n", "m", act(function(r)
-		M.queue(r.n)
-	end), kopts)
-	vim.keymap.set("n", "o", act(function(r)
-		M.open_web(r.n)
-	end), kopts)
+end
 
-	-- land the cursor on the first actionable row
-	for i, r in ipairs(rows) do
+-- multi-PR list (the `gh pr status` buckets)
+local function open_float(lines, rows)
+	local buf, win, close = make_float(lines, "  Pull Requests ")
+	bind_actions(buf, close, function()
+		local r = rows[vim.api.nvim_win_get_cursor(win)[1]]
+		if r then
+			return r.n, r.base
+		end
+	end)
+	for i, r in ipairs(rows) do -- land on the first actionable row
 		if r then
 			vim.api.nvim_win_set_cursor(win, { i, 0 })
 			break
 		end
 	end
+end
+
+-- single-PR status detail (the cached branch PR, or an arbitrary one)
+local function open_pr_float(pr)
+	local ci_sym, ci_word = ci_of(pr)
+	local author = pr.author and pr.author.login or "?"
+	local lines = {
+		("#%d  %s"):format(pr.number, pr.title or ""),
+		"",
+		("CI       %s %s"):format(ci_sym, ci_word),
+		("Review   %s"):format(review_label(pr)),
+		("Base     %s  ←  Head  %s"):format(pr.baseRefName or "?", pr.headRefName or "?"),
+		("Author   %s"):format(author),
+		("State    %s"):format((pr.state or ""):lower()),
+		"",
+		"  d diff · a approve · r reviewers · m queue · o web · q close",
+	}
+	local buf, _, close = make_float(lines, ("  PR #%d "):format(pr.number))
+	bind_actions(buf, close, function()
+		return pr.number, pr.baseRefName
+	end)
 end
 
 function M.hub()
@@ -516,6 +562,59 @@ function M.hub()
 	)
 end
 
+-- Status of the CACHED current-branch PR — instant, no network. If the branch
+-- hasn't resolved yet, kick a refresh and say so (next press will have it).
+function M.current()
+	local dir = get_dir()
+	local key = dir_key[dir]
+	if key == nil then
+		M.refresh(dir)
+		vim.notify("resolving this branch's PR — press again in a moment", vim.log.levels.INFO)
+		return
+	elseif key == false then
+		vim.notify("no PR for this branch", vim.log.levels.WARN)
+		return
+	end
+	local entry = cache[key]
+	if not entry or not entry.pr then
+		vim.notify("no PR for this branch (or still loading)", vim.log.levels.WARN)
+		return
+	end
+	open_pr_float(entry.pr)
+end
+
+-- Jump to any PR by number / #number / github URL → its status float.
+function M.goto_pr()
+	local root = repo_root()
+	if not root then
+		return
+	end
+	Snacks.input({ prompt = "PR number / #n / url: " }, function(v)
+		if not v or v == "" then
+			return
+		end
+		local n = v:match("/pull/(%d+)") or v:match("^#?(%d+)$") or v:match("(%d+)")
+		if not n then
+			vim.notify("could not find a PR number in that", vim.log.levels.WARN)
+			return
+		end
+		vim.system({ "gh", "pr", "view", n, "--json", PR_FIELDS }, { cwd = root, text = true }, function(res)
+			vim.schedule(function()
+				if res.code ~= 0 then
+					vim.notify("gh: " .. vim.trim(res.stderr), vim.log.levels.ERROR)
+					return
+				end
+				local ok, data = pcall(vim.json.decode, res.stdout)
+				if not ok or not data or not data.number then
+					vim.notify("could not read PR #" .. n, vim.log.levels.ERROR)
+					return
+				end
+				open_pr_float(data)
+			end)
+		end)
+	end)
+end
+
 -- ── setup (idempotent — both lualine and the plugin shim call it) ─────────
 function M.setup()
 	if M._did_setup then
@@ -542,7 +641,9 @@ function M.setup()
 		end,
 	})
 
-	vim.keymap.set("n", "<leader>P", M.hub, { desc = "PR hub (current · mine · review-requested)" })
+	vim.keymap.set("n", "<leader>Po", M.current, { desc = "PR: status of this branch's PR (cached, instant)" })
+	vim.keymap.set("n", "<leader>Pl", M.hub, { desc = "PR: list float (current · mine · review-requested)" })
+	vim.keymap.set("n", "<leader>Pg", M.goto_pr, { desc = "PR: go to a PR by number / #n / url" })
 	vim.keymap.set("n", "<leader>gt", M.toggle, { desc = "Toggle inline PR review comments" })
 end
 
