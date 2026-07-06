@@ -360,6 +360,23 @@ function M.toss_file()
 	end)
 end
 
+-- toss the CURRENT LINE as a pointer: @path#L42 (with the enclosing symbol
+-- name when treesitter can find one). Like toss_file, but line-anchored.
+function M.toss_line()
+	local r = copy.get_relative_filepath()
+	if r == "[No Name]" then
+		vim.notify("no file here", vim.log.levels.WARN)
+		return
+	end
+	local lnum = vim.api.nvim_win_get_cursor(0)[1]
+	local nm = ts_name(node_at(lnum, 1))
+	local ref = ("@%s#L%d%s"):format(r, lnum, (nm and (" (" .. nm .. ")") or ""))
+	M.with_bucket(function(name)
+		add_item(name, { ref = ref })
+		toast(name)
+	end)
+end
+
 function M.toss_selection()
 	local r = copy.get_relative_filepath()
 	if r == "[No Name]" then
@@ -635,6 +652,7 @@ function M.setup()
 	-- toss is the one that differs by mode: file in normal, selection in visual
 	map("n", "<leader>st", M.toss_file, { desc = "Satchel: toss current file" })
 	map("x", "<leader>st", M.toss_selection, { desc = "Satchel: toss selection" })
+	map("n", "<leader>sL", M.toss_line, { desc = "Satchel: toss current line (@file#L)" })
 	-- sT skips the bucket: straight into the ticket, in the background
 	map("n", "<leader>sT", M.toss_file_to_ticket, { desc = "Satchel: toss file → ticket directly" })
 	map("x", "<leader>sT", M.toss_sel_to_ticket, { desc = "Satchel: toss selection → ticket directly" })

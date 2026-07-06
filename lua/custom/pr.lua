@@ -3,7 +3,8 @@
 --
 -- Folds in what used to be prstatus.lua (statusline text/state) and
 -- prcomments.lua (inline review comments), and adds the action layer:
---   <leader>Po  status of THIS branch's PR — from cache, instant, no network
+--   <leader>Pc  THIS branch's PR — status float, from cache, instant
+--   <leader>Pca   approve it   ·   <leader>Pcd  diff it (no checkout)
 --   <leader>Pl  list float: current · mine · review-requested (one `gh pr
 --                 status` call — the explicit, opt-in list; never `gh pr list`)
 --   <leader>Pg  go to any PR by number / #n / github url → its status
@@ -43,12 +44,43 @@ local dir_key = {} -- dir -> key, or false when dir has no repo/branch/PR
 local last_attempt = {} -- dir -> last resolve attempt time
 local fetching = {} -- key -> true while a gh fetch is in flight
 
+-- vim.system THROWS ENOENT when the binary is missing (classic: `gh` lives in
+-- Homebrew's bin, which a GUI-launched nvim doesn't have on PATH). Wrap it so a
+-- missing tool degrades to exit code 127 instead of crashing the callback and
+-- leaving the resolver stuck on "resolving…". Uses `vim.system,` (comma) so the
+-- vim.system( -> sys( sweep below leaves this reference alone.
+local function sys(cmd, opts, cb)
+	local ok, err = pcall(vim.system, cmd, opts, cb)
+	if not ok then
+		vim.schedule(function()
+			cb({ code = 127, stdout = "", stderr = tostring(err) })
+		end)
+	end
+end
+
+-- Add the usual bins if `gh` isn't resolvable — fixes GUI nvim's bare PATH for
+-- the whole session, not just this module.
+local function ensure_gh_path()
+	if vim.fn.exepath("gh") ~= "" then
+		return true
+	end
+	for _, p in ipairs({ "/opt/homebrew/bin", "/usr/local/bin", (vim.env.HOME or "") .. "/.local/bin" }) do
+		if vim.fn.isdirectory(p) == 1 and not (":" .. (vim.env.PATH or "") .. ":"):find(":" .. p .. ":", 1, true) then
+			vim.env.PATH = p .. ":" .. (vim.env.PATH or "")
+		end
+	end
+	return vim.fn.exepath("gh") ~= ""
+end
+
+-- "the repo I'm working in" — ignore diff views / oil / terminals / pickers (a
+-- set buftype, or a scheme:// name) so reviewing a PR's diff doesn't make the
+-- current-branch PR resolve to the PR you're looking at.
 local function get_dir()
-	local bufname = vim.api.nvim_buf_get_name(0)
-	if bufname == "" then
+	local name = vim.api.nvim_buf_get_name(0)
+	if name == "" or vim.bo.buftype ~= "" or name:match("^%w+://") then
 		return vim.fn.getcwd()
 	end
-	return vim.fs.dirname(bufname)
+	return vim.fs.dirname(name)
 end
 
 local function repo_from_url(url)
@@ -189,12 +221,16 @@ local function fetch_comments(key, root)
 	if not entry or not entry.pr then
 		return
 	end
+	if entry.comments_ts and os.time() - entry.comments_ts < REFRESH_INTERVAL then
+		return -- throttle: the CI watcher can force fetch_pr often
+	end
+	entry.comments_ts = os.time()
 	local repo = repo_from_url(entry.pr.url)
 	if not repo then
 		return
 	end
 	local endpoint = ("repos/%s/pulls/%d/comments"):format(repo, entry.pr.number)
-	vim.system({ "gh", "api", endpoint }, { cwd = root, text = true }, function(res)
+	sys({ "gh", "api", endpoint }, { cwd = root, text = true }, function(res)
 		vim.schedule(function()
 			if res.code ~= 0 then
 				return
@@ -211,16 +247,35 @@ local function fetch_comments(key, root)
 	end)
 end
 
+-- ci flip notifier: fire once when CI leaves "pending" for a decisive verdict,
+-- i.e. you were waiting and it just resolved. Reset when it goes back to
+-- pending (a new push), so the next resolution notifies again.
+local notified = {} -- key -> last ci_state we notified about
+local function notify_flip(key, prev_ci, ci_state, number, ci_word)
+	if ci_state == "pending" then
+		notified[key] = nil
+		return
+	end
+	if prev_ci == "pending" and notified[key] ~= ci_state then
+		notified[key] = ci_state
+		vim.notify(
+			("PR #%d checks %s %s"):format(number, ci_word, ci_state == "pass" and "✓" or "✗"),
+			ci_state == "pass" and vim.log.levels.INFO or vim.log.levels.WARN
+		)
+	end
+end
+
 -- ── the shared core: resolve branch's PR, cache it ────────────────────────
-local function fetch_pr(key, root, branch)
+-- force bypasses the TTL (the CI watcher uses it to poll a pending PR).
+local function fetch_pr(key, root, branch, force)
 	local now = os.time()
 	local entry = cache[key]
-	if (entry and now - entry.ts < REFRESH_INTERVAL) or fetching[key] then
+	if fetching[key] or (not force and entry and now - entry.ts < REFRESH_INTERVAL) then
 		return
 	end
 	fetching[key] = true
 
-	vim.system({ "gh", "pr", "view", branch, "--json", PR_FIELDS }, { cwd = root, text = true }, function(res)
+	sys({ "gh", "pr", "view", branch, "--json", PR_FIELDS }, { cwd = root, text = true }, function(res)
 		vim.schedule(function()
 			fetching[key] = false
 			local ok, data = pcall(vim.json.decode, res.stdout)
@@ -228,8 +283,14 @@ local function fetch_pr(key, root, branch)
 				cache[key] = { ts = now } -- no PR on this branch
 				return
 			end
+			local prev = cache[key]
 			local rendered, state = render(data)
-			cache[key] = { pr = data, rendered = rendered, state = state, ts = now }
+			local _, ci_word, ci_state = ci_of(data)
+			-- update in place so review comments (by_path) survive a CI refetch
+			local e = prev or {}
+			e.pr, e.rendered, e.state, e.ci_state, e.ts = data, rendered, state, ci_state, now
+			cache[key] = e
+			notify_flip(key, prev and prev.ci_state, ci_state, data.number, ci_word)
 			if M.comments_enabled then
 				fetch_comments(key, root)
 			end
@@ -244,7 +305,7 @@ function M.refresh(dir)
 	end
 	last_attempt[dir] = now
 
-	vim.system({ "git", "rev-parse", "--show-toplevel" }, { cwd = dir, text = true }, function(res)
+	sys({ "git", "rev-parse", "--show-toplevel" }, { cwd = dir, text = true }, function(res)
 		if res.code ~= 0 then
 			vim.schedule(function()
 				dir_key[dir] = false
@@ -252,7 +313,7 @@ function M.refresh(dir)
 			return
 		end
 		local root = vim.trim(res.stdout)
-		vim.system({ "git", "branch", "--show-current" }, { cwd = root, text = true }, function(res2)
+		sys({ "git", "branch", "--show-current" }, { cwd = root, text = true }, function(res2)
 			vim.schedule(function()
 				local branch = res2.code == 0 and vim.trim(res2.stdout) or ""
 				if branch == "" then
@@ -320,7 +381,7 @@ end
 
 -- run a gh command async, notify the outcome
 local function gh(root, args, ok_msg)
-	vim.system(vim.list_extend({ "gh" }, args), { cwd = root, text = true }, function(res)
+	sys(vim.list_extend({ "gh" }, args), { cwd = root, text = true }, function(res)
 		vim.schedule(function()
 			if res.code == 0 then
 				vim.notify(ok_msg, vim.log.levels.INFO)
@@ -341,7 +402,7 @@ function M.diff(n, base)
 	base = base or "main"
 	local ref = "refs/pr/" .. n
 	vim.notify("fetching PR #" .. n .. " …", vim.log.levels.INFO)
-	vim.system(
+	sys(
 		{ "git", "-C", root, "fetch", REMOTE, ("pull/%d/head:%s"):format(n, ref) },
 		{ text = true },
 		function(res)
@@ -541,7 +602,7 @@ function M.hub()
 		return
 	end
 	vim.notify("loading PRs …", vim.log.levels.INFO)
-	vim.system(
+	sys(
 		{ "gh", "pr", "status", "--json", STATUS_FIELDS },
 		{ cwd = root, text = true },
 		function(res)
@@ -562,25 +623,46 @@ function M.hub()
 	)
 end
 
--- Status of the CACHED current-branch PR — instant, no network. If the branch
--- hasn't resolved yet, kick a refresh and say so (next press will have it).
-function M.current()
+-- The CACHED current-branch PR — instant, no network. Returns the pr table, or
+-- nil (with a notify) if it hasn't resolved yet / the branch has no PR.
+function M.current_pr()
 	local dir = get_dir()
 	local key = dir_key[dir]
 	if key == nil then
 		M.refresh(dir)
-		vim.notify("resolving this branch's PR — press again in a moment", vim.log.levels.INFO)
-		return
+		vim.notify("resolving this branch's PR — try again in a moment", vim.log.levels.INFO)
+		return nil
 	elseif key == false then
 		vim.notify("no PR for this branch", vim.log.levels.WARN)
-		return
+		return nil
 	end
 	local entry = cache[key]
 	if not entry or not entry.pr then
 		vim.notify("no PR for this branch (or still loading)", vim.log.levels.WARN)
-		return
+		return nil
 	end
-	open_pr_float(entry.pr)
+	return entry.pr
+end
+
+function M.current()
+	local pr = M.current_pr()
+	if pr then
+		open_pr_float(pr)
+	end
+end
+
+function M.approve_current()
+	local pr = M.current_pr()
+	if pr then
+		M.approve(pr.number)
+	end
+end
+
+function M.diff_current()
+	local pr = M.current_pr()
+	if pr then
+		M.diff(pr.number, pr.baseRefName)
+	end
 end
 
 -- Jump to any PR by number / #number / github URL → its status float.
@@ -598,7 +680,7 @@ function M.goto_pr()
 			vim.notify("could not find a PR number in that", vim.log.levels.WARN)
 			return
 		end
-		vim.system({ "gh", "pr", "view", n, "--json", PR_FIELDS }, { cwd = root, text = true }, function(res)
+		sys({ "gh", "pr", "view", n, "--json", PR_FIELDS }, { cwd = root, text = true }, function(res)
 			vim.schedule(function()
 				if res.code ~= 0 then
 					vim.notify("gh: " .. vim.trim(res.stderr), vim.log.levels.ERROR)
@@ -615,12 +697,34 @@ function M.goto_pr()
 	end)
 end
 
+-- ── CI watcher ────────────────────────────────────────────────────────────
+-- Only spends a `gh` call when the current branch's PR is actually pending, so
+-- it's free while you're not waiting on checks. notify_flip does the alerting.
+local watch_timer
+local function poll_ci()
+	local key = dir_key[get_dir()]
+	local e = key and cache[key]
+	if e and e.pr and e.ci_state == "pending" then
+		local root, branch = key:match("^(.-)|(.+)$")
+		fetch_pr(key, root, branch, true) -- force past the TTL
+	end
+end
+
 -- ── setup (idempotent — both lualine and the plugin shim call it) ─────────
 function M.setup()
 	if M._did_setup then
 		return
 	end
 	M._did_setup = true
+
+	if not ensure_gh_path() then
+		vim.notify("pr.lua: `gh` not found on PATH — PR features need the GitHub CLI", vim.log.levels.WARN)
+	end
+
+	watch_timer = vim.uv.new_timer()
+	watch_timer:start(30000, 30000, function()
+		vim.schedule(poll_ci)
+	end)
 
 	-- rose-pine muted italic — same tone agentrecv uses for ambient notes
 	vim.api.nvim_set_hl(0, "PrCommentNote", { fg = "#908caa", italic = true, default = true })
@@ -641,8 +745,10 @@ function M.setup()
 		end,
 	})
 
-	vim.keymap.set("n", "<leader>Po", M.current, { desc = "PR: status of this branch's PR (cached, instant)" })
-	vim.keymap.set("n", "<leader>Pl", M.hub, { desc = "PR: list float (current · mine · review-requested)" })
+	vim.keymap.set("n", "<leader>Pc", M.current, { desc = "PR: current branch's PR (status float)" })
+	vim.keymap.set("n", "<leader>Pca", M.approve_current, { desc = "PR: approve current" })
+	vim.keymap.set("n", "<leader>Pcd", M.diff_current, { desc = "PR: diff current" })
+	vim.keymap.set("n", "<leader>Pl", M.hub, { desc = "PR: list (current · mine · review-requested)" })
 	vim.keymap.set("n", "<leader>Pg", M.goto_pr, { desc = "PR: go to a PR by number / #n / url" })
 	vim.keymap.set("n", "<leader>gt", M.toggle, { desc = "Toggle inline PR review comments" })
 end

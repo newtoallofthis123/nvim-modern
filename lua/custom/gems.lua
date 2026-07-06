@@ -195,3 +195,86 @@ map("n", "<leader>cr", function()
 	local rep = vim.fn.input("Replace with: ")
 	vim.cmd(("cfdo %%s/%s/%s/ge | update"):format(pat, rep))
 end, { desc = "Substitute across quickfix files" })
+
+----------------------------------------------------------------------
+-- Markdown link ergonomics (buffer-local to markdown — gf/<CR> must not
+-- be shadowed everywhere).
+--   <C-l> (visual)  wrap the selection in a link from the clipboard URL
+--                     → [selection](https://…)
+--   gf / <CR>       follow the link under the cursor:
+--                     [[name]]        → name.md next to this file (created)
+--                     [txt](./rel.md) → that relative file (created if .md)
+--                     [txt](https://) → opens in the browser
+--                   no link under the cursor → the default gf / newline.
+----------------------------------------------------------------------
+local function link_selection()
+	local url = vim.trim(vim.fn.getreg("+"))
+	if not url:match("^https?://%S+$") then
+		vim.notify("clipboard is not a URL", vim.log.levels.WARN)
+		return
+	end
+	local save, savet = vim.fn.getreg("v"), vim.fn.getregtype("v")
+	vim.cmd('noautocmd normal! "vy')
+	local text = vim.fn.getreg("v")
+	vim.fn.setreg("v", ("[%s](%s)"):format(text, url), "c")
+	vim.cmd('noautocmd normal! gv"vp')
+	vim.fn.setreg("v", save, savet)
+end
+
+local function link_under_cursor()
+	local line = vim.api.nvim_get_current_line()
+	local col = vim.api.nvim_win_get_cursor(0)[2] + 1
+	for s, name, e in line:gmatch("()%[%[([^%]]+)%]%]()") do
+		if col >= s and col < e then
+			return { kind = "wiki", value = vim.trim(name) }
+		end
+	end
+	for s, url, e in line:gmatch("()%[[^%]]*%]%(([^)]+)%)()") do
+		if col >= s and col < e then
+			return { kind = "link", value = vim.trim(url) }
+		end
+	end
+end
+
+local function open_or_create(path)
+	path = vim.fn.fnamemodify(path, ":p")
+	if vim.fn.filereadable(path) == 0 then
+		vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
+		local title = vim.fn.fnamemodify(path, ":t:r"):gsub("[-_]", " ")
+		vim.fn.writefile({ "# " .. title, "" }, path)
+	end
+	vim.cmd.edit(vim.fn.fnameescape(path))
+end
+
+local function follow_link(fallback)
+	local t = link_under_cursor()
+	if not t then
+		pcall(vim.cmd, "normal! " .. fallback)
+		return
+	end
+	local base = vim.fn.expand("%:p:h")
+	if t.kind == "link" then
+		if t.value:match("^%w+://") then
+			vim.ui.open(t.value)
+		else
+			open_or_create(base .. "/" .. t.value)
+		end
+	else
+		open_or_create(base .. "/" .. (t.value:match("%.md$") and t.value or t.value .. ".md"))
+	end
+end
+
+vim.api.nvim_create_autocmd("FileType", {
+	group = vim.api.nvim_create_augroup("GemsMarkdown", { clear = true }),
+	pattern = "markdown",
+	callback = function(ev)
+		local o = { buffer = ev.buf, silent = true }
+		map("x", "<C-l>", link_selection, vim.tbl_extend("force", o, { desc = "Wrap selection as link" }))
+		map("n", "gf", function()
+			follow_link("gf")
+		end, vim.tbl_extend("force", o, { desc = "Follow markdown link" }))
+		map("n", "<cr>", function()
+			follow_link("+")
+		end, vim.tbl_extend("force", o, { desc = "Follow markdown link" }))
+	end,
+})

@@ -107,6 +107,7 @@ function M.refresh()
 			else
 				local height = math.min(p.span + 2 * PAD, MAXH)
 				local lnum = srow + 1
+				local lbl = p._label and ("[" .. p._label .. "] ") or ""
 				local cfg = {
 					relative = "editor",
 					row = row,
@@ -116,7 +117,7 @@ function M.refresh()
 					style = "minimal",
 					border = "rounded",
 					focusable = false,
-					title = string.format(" 🐕 %s:%d ", p.file, lnum),
+					title = string.format(" %s🐕 %s:%d ", lbl, p.file, lnum),
 					title_pos = "center",
 				}
 				local sig = table.concat({ row, col, width, height, cfg.title }, ":")
@@ -216,6 +217,57 @@ function M.pin_visual()
 	add_pin(buf, s, e)
 end
 
+-- jump ----------------------------------------------------------------------
+
+-- Label every pin float with a letter, wait for a keypress, and jump the
+-- current window to that pin's region. Labels are stable home-row-first so the
+-- muscle memory sticks (not truly random, which would defeat that).
+local LABELS = "asdfghjklqwertyuiopzxcvbnm"
+
+function M.jump()
+	if #M.pins == 0 then
+		vim.notify("leash: no pins", vim.log.levels.INFO)
+		return
+	end
+	local lookup = {}
+	for i, p in ipairs(M.pins) do
+		local ch = LABELS:sub(i, i)
+		if ch == "" then
+			break
+		end
+		p._label = ch
+		lookup[ch] = p
+	end
+	M.refresh()
+	vim.cmd("redraw")
+
+	local ok, ch = pcall(vim.fn.getcharstr)
+	for _, p in ipairs(M.pins) do
+		p._label = nil
+	end
+	M.refresh()
+	if not ok then
+		return
+	end
+
+	local p = lookup[ch]
+	if not p then
+		return -- unknown key / <esc>: quietly cancel
+	end
+	if not vim.api.nvim_buf_is_valid(p.buf) then
+		vim.notify("leash: buffer gone", vim.log.levels.WARN)
+		return
+	end
+	local srow = mark_row(p)
+	if not srow then
+		vim.notify("leash: reference gone", vim.log.levels.INFO)
+		return
+	end
+	vim.api.nvim_set_current_buf(p.buf)
+	pcall(vim.api.nvim_win_set_cursor, 0, { srow + 1, 0 })
+	vim.cmd("normal! zz")
+end
+
 -- setup ---------------------------------------------------------------------
 
 function M.setup()
@@ -223,6 +275,7 @@ function M.setup()
 
 	vim.keymap.set("n", "<leader>L", M.pin_normal, { desc = "leash: pin line" })
 	vim.keymap.set("x", "<leader>L", M.pin_visual, { desc = "leash: pin selection" })
+	vim.keymap.set("n", "<leader>J", M.jump, { desc = "leash: jump to a pin (label)" })
 	vim.keymap.set("n", "<leader>X", M.clear, { desc = "leash: clear all pins" })
 
 	vim.api.nvim_create_user_command("Leash", function(a)

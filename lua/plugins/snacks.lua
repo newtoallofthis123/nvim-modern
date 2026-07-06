@@ -497,6 +497,33 @@ _   __            __   _
 			mode = { "n", "t" },
 		},
 		{
+			"<C-t>e",
+			function()
+				-- prompt for a command, run it in the SAME count=999 horizontal
+				-- terminal <C-t>h toggles — reused if already there, opened if not.
+				Snacks.input({ prompt = "exec: " }, function(cmd)
+					if not cmd or cmd == "" then
+						return
+					end
+					local term = Snacks.terminal.get(nil, {
+						win = { position = "bottom", height = 0.3 },
+						count = 999,
+						create = true,
+					})
+					if not term or not term.buf then
+						return
+					end
+					term:show()
+					local chan = vim.b[term.buf].terminal_job_id
+					if chan then
+						vim.fn.chansend(chan, cmd .. "\n")
+					end
+				end)
+			end,
+			desc = "Exec command in horizontal terminal",
+			mode = { "n", "t" },
+		},
+		{
 			"<C-t>1",
 			function()
 				vim.cmd("tabnew")
