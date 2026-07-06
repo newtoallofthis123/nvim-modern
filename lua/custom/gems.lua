@@ -110,29 +110,6 @@ vim.api.nvim_create_user_command("Redir", function(ctx)
 end, { nargs = "+", complete = "command", desc = "Capture command output in a scratch split" })
 
 ----------------------------------------------------------------------
--- Scratch pad — a throwaway markdown buffer for jotting while reviewing.
--- Reused for the session; toggles a bottom split.
-----------------------------------------------------------------------
-local scratch_buf
-map("n", "<leader>ns", function()
-	if scratch_buf and vim.api.nvim_buf_is_valid(scratch_buf) then
-		local win = vim.fn.bufwinid(scratch_buf)
-		if win ~= -1 then
-			vim.api.nvim_win_close(win, false) -- already visible → toggle off
-			return
-		end
-		vim.cmd("botright 12split")
-		vim.api.nvim_set_current_buf(scratch_buf)
-	else
-		vim.cmd("botright 12split")
-		scratch_buf = vim.api.nvim_create_buf(true, true)
-		vim.api.nvim_set_current_buf(scratch_buf)
-		vim.bo[scratch_buf].filetype = "markdown"
-		pcall(vim.api.nvim_buf_set_name, scratch_buf, "scratch")
-	end
-end, { desc = "Scratch pad (toggle)" })
-
-----------------------------------------------------------------------
 -- Markdown checkbox toggle — tear through an AI's task list.
 --   - [ ] todo   <leader>cc ->   - [x] todo   (and back)
 --   plain list item gains a [ ]; works over a visual range too.

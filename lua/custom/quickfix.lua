@@ -23,6 +23,76 @@ map("x", "<leader>*", function()
 	grep(sel)
 end, { desc = "Grep selection → quickfix" })
 
+-- every file this branch changed vs main → quickfix, landing on each file's
+-- first changed line. Diffs from the merge-base to the WORKING TREE, so it
+-- covers committed branch work *and* uncommitted edits — the review view.
+local function branch_to_qf()
+	local root = vim.fn.systemlist("git rev-parse --show-toplevel")[1]
+	if vim.v.shell_error ~= 0 or not root or root == "" then
+		vim.api.nvim_echo({ { "not in a git repo", "Comment" } }, false, {})
+		return
+	end
+	-- pick the trunk (main, else master) and diff from where we forked off it
+	local base
+	for _, b in ipairs({ "main", "master" }) do
+		vim.fn.system({ "git", "-C", root, "rev-parse", "--verify", "--quiet", b })
+		if vim.v.shell_error == 0 then
+			base = b
+			break
+		end
+	end
+	if not base then
+		vim.api.nvim_echo({ { "no main/master branch", "Comment" } }, false, {})
+		return
+	end
+	local mb = vim.fn.systemlist({ "git", "-C", root, "merge-base", base, "HEAD" })[1]
+	if not mb or mb == "" then
+		return
+	end
+
+	-- first changed line per file: walk `git diff <mb> -U0` hunk headers and
+	-- keep the +start of the first hunk seen after each `+++ b/<path>`.
+	local firstline = {}
+	local cur
+	for _, dl in ipairs(vim.fn.systemlist({
+		"git", "-C", root, "-c", "core.quotepath=false", "--no-pager",
+		"diff", mb, "-U0", "--no-color",
+	})) do
+		local p = dl:match("^%+%+%+ b/(.+)$")
+		if p then
+			cur = p:gsub('^"(.*)"$', "%1")
+		elseif cur then
+			local start = dl:match("^@@ %-%d+,?%d* %+(%d+)")
+			if start then
+				firstline[cur] = firstline[cur] or tonumber(start)
+			end
+		end
+	end
+
+	local files = vim.fn.systemlist({
+		"git", "-C", root, "-c", "core.quotepath=false", "diff", "--name-only", mb,
+	})
+	local items = {}
+	for _, path in ipairs(files) do
+		path = path:gsub('^"(.*)"$', "%1") -- strip quoting on odd paths
+		if path ~= "" then
+			local abs = root .. "/" .. path
+			if vim.fn.filereadable(abs) == 1 then
+				local lnum = firstline[path] or 1
+				local content = vim.fn.readfile(abs, "", lnum)[lnum] or ""
+				table.insert(items, { filename = abs, lnum = lnum, col = 1, text = content })
+			end
+		end
+	end
+	if #items == 0 then
+		vim.api.nvim_echo({ { "no changes vs " .. base, "Comment" } }, false, {})
+		return
+	end
+	vim.fn.setqflist({}, " ", { title = "Branch vs " .. base, items = items })
+	vim.cmd("botright copen")
+end
+map("n", "<leader>gq", branch_to_qf, { desc = "Branch changes vs main → quickfix" })
+
 -- walk the list, centered + wrapping
 local function qnav(forward)
 	local ok = pcall(vim.cmd, forward and "cnext" or "cprev")

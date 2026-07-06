@@ -257,6 +257,9 @@ function M.send(opts)
 	-- the picker can change mode/marks.
 	local path = copy.get_relative_filepath()
 	if path == "[No Name]" then
+		path = copy.get_absolute_filepath() -- outside cwd (e.g. a satchel ticket) → full path
+	end
+	if path == "[No Name]" then
 		notify("No file to reference", vim.log.levels.WARN)
 		return
 	end

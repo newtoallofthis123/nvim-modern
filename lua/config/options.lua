@@ -28,6 +28,9 @@ vim.opt.showtabline = 2
 
 vim.opt.mouse = "a"
 
+-- where throwaway scratch files live (see custom.napkin)
+vim.g.tmp_dir = "/tmp/nvim"
+
 vim.g.clipboard = {
 	name = "macOS-clipboard",
 	copy = {

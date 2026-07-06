@@ -17,7 +17,7 @@ return {
 
 			-- Quiet PR awareness: "#123 check" once gh resolves it, colored by CI /
 			-- review state. Empty (and silent) until then, never blocks.
-			local prstatus = require("custom.prstatus")
+			local prstatus = require("custom.pr")
 			prstatus.setup()
 
 			local pr = {

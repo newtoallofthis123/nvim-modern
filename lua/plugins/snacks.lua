@@ -1,45 +1,3 @@
--- Cross-repo review inbox. `gh pr list --search` (used by <leader>gv) is
--- scoped to a single repo, so org-wide "review requested" needs `gh search
--- prs` instead — a different command with a leaner --json shape. To keep the
--- SAME format/preview/confirm machinery as the stock gh_pr picker (so Start
--- Review / View diff / Submit all work identically), each hit is re-fetched
--- through `Api.get`, which is the exact call the stock picker uses to build
--- a fully-populated snacks.picker.gh.Item (headRefOid, statusCheckRollup,
--- pendingReview, etc.) — not a hand-rolled subset.
-local function review_inbox_all()
-	local Api = require("snacks.gh.api")
-	Snacks.picker({
-		title = "  Review Requested (all repos)",
-		finder = function(_, _ctx)
-			return function(cb)
-				local raw = Api.cmd_sync({
-					args = { "search", "prs", "--review-requested=@me", "--state=open", "--json", "number,repository" },
-					notify = false,
-				})
-				if not raw or raw == "" then
-					return
-				end
-				local ok, entries = pcall(vim.json.decode, raw)
-				if not ok or not entries then
-					return
-				end
-				for _, entry in ipairs(entries) do
-					local repo = entry.repository and entry.repository.nameWithOwner
-					if repo then
-						local item = Api.get({ type = "pr", repo = repo, number = entry.number })
-						if item then
-							cb(item)
-						end
-					end
-				end
-			end
-		end,
-		format = "gh_format",
-		preview = "gh_preview",
-		confirm = "gh_actions",
-	})
-end
-
 return {
 	"folke/snacks.nvim",
 	priority = 1000,
@@ -290,16 +248,41 @@ _   __            __   _
 		{
 			"<leader>ff",
 			function()
-				Snacks.picker.files()
+				if vim.bo.filetype == "oil" then
+					Snacks.picker.files({ cwd = require("oil").get_current_dir() })
+				else
+					Snacks.picker.files()
+				end
 			end,
-			desc = "Open Files",
+			desc = "Open Files (scoped to oil dir when in oil)",
 		},
 		{
 			"<leader>fs",
 			function()
-				Snacks.picker.grep()
+				if vim.bo.filetype == "oil" then
+					Snacks.picker.grep({ dirs = { require("oil").get_current_dir() } })
+				else
+					Snacks.picker.grep()
+				end
 			end,
-			desc = "Grep in Files",
+			desc = "Grep in Files (scoped to oil dir when in oil)",
+		},
+		{
+			"<leader>fs",
+			function()
+				vim.cmd('noau normal! "vy"')
+				local text = vim.fn.getreg("v"):gsub("\n", " ")
+				Snacks.picker.grep({ search = text })
+			end,
+			desc = "Grep visual selection",
+			mode = "v",
+		},
+		{
+			"<leader>f.",
+			function()
+				Snacks.picker.smart()
+			end,
+			desc = "Smart find (frecency: files + buffers)",
 		},
 		{
 			"<leader>fx",
@@ -463,34 +446,8 @@ _   __            __   _
 			end,
 			desc = "GitHub Issues (all)",
 		},
-		{
-			"<leader>gp",
-			function()
-				Snacks.picker.gh_pr()
-			end,
-			desc = "GitHub Pull Requests (open)",
-		},
-		{
-			"<leader>gP",
-			function()
-				Snacks.picker.gh_pr({ state = "all" })
-			end,
-			desc = "GitHub Pull Requests (all)",
-		},
-		{
-			"<leader>gv",
-			function()
-				-- `gh pr list --search` under the hood — repo-scoped to cwd's repo,
-				-- same finder/format/confirm as the stock gh_pr picker.
-				Snacks.picker.gh_pr({ search = "review-requested:@me" })
-			end,
-			desc = "GitHub: Review requested (this repo)",
-		},
-		{
-			"<leader>gV",
-			review_inbox_all,
-			desc = "GitHub: Review requested (all repos)",
-		},
+		-- PRs live in the central hub now (custom/pr.lua, <leader>P) — the
+		-- snacks gh_pr pickers ran `gh pr list` (all PRs, slow) on every open.
 
 		-- Scratch buffer
 		{
