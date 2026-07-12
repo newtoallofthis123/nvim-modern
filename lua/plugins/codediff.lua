@@ -1,6 +1,5 @@
 -- VSCode-grade two-tier diffing. Standalone here (the review.nvim layer that
--- used to sit on top was removed); the PR hub (custom/pr.lua) drives :CodeDiff
--- to diff other people's PRs without checking them out.
+-- used to sit on top was removed; the PR hub now diffs PRs in Diffview).
 --   <leader>rd  :CodeDiff             — git status diff explorer (working tree)
 --   <leader>rD  :CodeDiff main...     — PR-style diff vs main/master (merge-base)
 return {
@@ -32,6 +31,13 @@ return {
 		diff = {
 			layout = "side-by-side",
 			jump_to_first_change = true,
+		},
+		keymaps = {
+			view = {
+				next_file = "<Tab>", -- diffview muscle memory (default ]f)
+				prev_file = "<S-Tab>", -- (default [f)
+				show_help = "?", -- (default g?)
+			},
 		},
 	},
 }

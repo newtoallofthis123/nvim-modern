@@ -1,24 +1,32 @@
 -- pr.lua — the PR hub. One resolver for "which PR is this branch", shared by
 -- every consumer, so "which PR am I on" is instant and cached (never blocks).
 --
--- Folds in what used to be prstatus.lua (statusline text/state) and
--- prcomments.lua (inline review comments), and adds the action layer:
---   <leader>Pc  THIS branch's PR — status float, from cache, instant
---   <leader>Pca   approve it   ·   <leader>Pcd  diff it (no checkout)
+-- The core concept is the FOCUSED PR — "the PR in view". Opening a PR any way
+-- (status float, hub row, goto by url, diffing it) focuses it, and every
+-- action key then acts on it without asking again. View a diff, then
+-- <leader>Pa approves THAT PR — no re-prompt. When nothing is focused,
+-- actions fall back to the current branch's PR.
+--
+-- Keymaps (flat — no chords waiting on timeoutlen):
+--   <leader>Pp  status float of the focused PR (falls back to branch PR)
+--   <leader>Pb  THIS branch's PR — also re-focuses it
 --   <leader>Pl  list float: current · mine · review-requested (one `gh pr
 --                 status` call — the explicit, opt-in list; never `gh pr list`)
---   <leader>Pg  go to any PR by number / #n / github url → its status
+--   <leader>Pg  go to any PR: number / #n / full github URL — a URL from a
+--                 DIFFERENT repo works too (gh -R + fetch from that repo)
+--   <leader>Pd  diff the focused PR in Diffview, no checkout
+--   <leader>Pa  approve         ·  <leader>Px  request changes
+--   <leader>Pc  comment         ·  <leader>Pr  request reviewers
+--   <leader>Pm  auto-merge/queue·  <leader>PC  checkout its branch
+--   <leader>Po  open on github  ·  <leader>Py  yank PR url
 --   <leader>gt  toggle inline PR review comments (ambient, read-only)
 --
--- Inside the float, acting on the PR under the cursor:
---   d / <CR>  diff in CodeDiff WITHOUT checkout (fetch the PR head to a ref)
---   a         approve (+ optional one-line body)
---   r         request reviewers
---   m         enable auto-merge / merge queue (--squash)
---   o         open on github.com   ·   q  close
+-- Inside the floats the same verbs work on the PR under the cursor:
+--   d/<CR> diff · a approve · x req-changes · c comment · r reviewers
+--   m queue · C checkout · y yank url · o web · q close
 --
 -- Rich per-line comments while reviewing? Leave them on the web (`o`, or
--- <leader>go on a code line) — approve here is a single body by design.
+-- <leader>go on a code line) — reviews here are single-body by design.
 --
 -- Everything shells out to `gh`/`git` async via vim.system; the statusline
 -- only ever reads an in-memory cache, 120s TTL per (root, branch).
@@ -83,8 +91,10 @@ local function get_dir()
 	return vim.fs.dirname(name)
 end
 
+-- "owner/repo" out of an https / ssh github url (or nil)
 local function repo_from_url(url)
-	return url and url:match("github%.com/([^/]+/[^/]+)")
+	local repo = url and url:match("github%.com[:/]([^/]+/[^/%s]+)")
+	return repo and repo:gsub("%.git$", "")
 end
 
 -- ── statusline render (lifted from prstatus) ──────────────────────────────
@@ -328,18 +338,30 @@ function M.refresh(dir)
 	end)
 end
 
--- lualine component: reads cache only, never blocks.
+-- forward decl — the focus state lives with the actions below
+local get_focus
+
+-- lualine component: reads cache only, never blocks. When a DIFFERENT PR is
+-- focused (you're reviewing someone else's), it's appended as ◎#n so the
+-- statusline always says what the action keys will hit.
 function M.text()
 	local dir = get_dir()
 	local key = dir_key[dir]
+	local s = ""
 	if key == nil then
 		M.refresh(dir)
-		return ""
-	elseif key == false then
-		return ""
+	elseif key ~= false then
+		local entry = cache[key]
+		s = entry and entry.rendered or ""
 	end
-	local entry = cache[key]
-	return entry and entry.rendered or ""
+	local f = get_focus and get_focus()
+	if f and f.pr then
+		local branch_n = s:match("^#(%d+)")
+		if f.repo or tostring(f.pr.number) ~= branch_n then
+			s = s .. (s ~= "" and "  " or "") .. "◎#" .. f.pr.number
+		end
+	end
+	return s
 end
 
 -- "pass" | "fail" | "pending" | "changes_requested" | "approved" | nil
@@ -367,7 +389,20 @@ function M.toggle()
 	end
 end
 
--- ── actions ───────────────────────────────────────────────────────────────
+-- ── the focused PR: "the PR in view" ──────────────────────────────────────
+-- Set whenever a PR is opened/diffed/jumped-to; every action targets it.
+-- ctx = { pr = <gh json (at least number, baseRefName)>, repo = "owner/repo"
+-- or nil when it's this repo's PR }.
+local focused
+
+local function set_focus(ctx)
+	focused = ctx
+end
+
+get_focus = function() -- fulfils the forward decl M.text() reads through
+	return focused
+end
+
 -- Resolve the repo root for the current buffer (sync — actions are explicit,
 -- user-initiated, and few, so a blocking git call is fine here).
 local function repo_root()
@@ -379,8 +414,27 @@ local function repo_root()
 	return out
 end
 
--- run a gh command async, notify the outcome
-local function gh(root, args, ok_msg)
+-- owner/repo of this repo's origin (nil when it isn't github)
+local function origin_repo(root)
+	local url = vim.fn.systemlist("git -C " .. vim.fn.shellescape(root) .. " remote get-url " .. REMOTE)[1]
+	return vim.v.shell_error == 0 and repo_from_url(url) or nil
+end
+
+-- The action target: the focused PR, else this branch's cached PR.
+local function target()
+	if focused then
+		return focused
+	end
+	local pr = M.current_pr() -- notifies when absent / still resolving
+	return pr and { pr = pr } or nil
+end
+
+-- run a gh command async, notify the outcome. ctx.repo adds -R for
+-- cross-repo PRs (a pasted URL from another repo just works).
+local function gh(root, args, ctx, ok_msg)
+	if ctx and ctx.repo then
+		vim.list_extend(args, { "-R", ctx.repo })
+	end
 	sys(vim.list_extend({ "gh" }, args), { cwd = root, text = true }, function(res)
 		vim.schedule(function()
 			if res.code == 0 then
@@ -392,79 +446,147 @@ local function gh(root, args, ok_msg)
 	end)
 end
 
--- Diff a PR in CodeDiff WITHOUT checking it out: fetch its head into a local
--- ref (working tree untouched), then two-pane it against the remote base.
-function M.diff(n, base)
-	local root = repo_root()
-	if not root then
-		return
-	end
-	base = base or "main"
-	local ref = "refs/pr/" .. n
-	vim.notify("fetching PR #" .. n .. " …", vim.log.levels.INFO)
-	sys(
-		{ "git", "-C", root, "fetch", REMOTE, ("pull/%d/head:%s"):format(n, ref) },
-		{ text = true },
-		function(res)
-			vim.schedule(function()
-				if res.code ~= 0 then
-					vim.notify("fetch failed: " .. vim.trim(res.stderr), vim.log.levels.ERROR)
-					return
-				end
-				vim.cmd(("CodeDiff %s/%s...%s"):format(REMOTE, base, ref))
-			end)
-		end
-	)
-end
+-- ── actions (each takes a ctx; keymaps feed them target()) ────────────────
 
-function M.approve(n)
+-- Diff a PR in Diffview WITHOUT checking it out: fetch its head (and, for a
+-- cross-repo PR, its base) into local refs — working tree untouched — then
+-- open the merge-base range, same provider/feel as <leader>gD.
+function M.diff(ctx)
 	local root = repo_root()
 	if not root then
 		return
 	end
-	vim.ui.input({ prompt = "Approve #" .. n .. " — body (optional): " }, function(body)
-		local args = { "pr", "review", tostring(n), "--approve" }
-		if body and body ~= "" then
-			vim.list_extend(args, { "--body", body })
-		end
-		gh(root, args, "approved #" .. n)
+	local n = ctx.pr.number
+	local base = ctx.pr.baseRefName or "main"
+	local head_ref = ("refs/pr/%d/head"):format(n)
+	local cmd = { "git", "-C", root, "fetch" }
+	local base_rev
+	if ctx.repo then
+		-- foreign repo: fetch both sides straight from its URL into local refs
+		base_rev = ("refs/pr/%d/base"):format(n)
+		vim.list_extend(cmd, {
+			"https://github.com/" .. ctx.repo .. ".git",
+			("+refs/pull/%d/head:%s"):format(n, head_ref),
+			("+refs/heads/%s:%s"):format(base, base_rev),
+		})
+	else
+		base_rev = REMOTE .. "/" .. base
+		-- fetching `base` alongside refreshes origin/<base> in the same call
+		vim.list_extend(cmd, { REMOTE, ("+refs/pull/%d/head:%s"):format(n, head_ref), base })
+	end
+	set_focus(ctx)
+	vim.notify("fetching PR #" .. n .. " …", vim.log.levels.INFO)
+	sys(cmd, { text = true }, function(res)
+		vim.schedule(function()
+			if res.code ~= 0 then
+				vim.notify("fetch failed: " .. vim.trim(res.stderr), vim.log.levels.ERROR)
+				return
+			end
+			vim.cmd(("DiffviewOpen %s...%s"):format(base_rev, head_ref))
+		end)
 	end)
 end
 
-function M.request_reviewers(n)
+-- gh review verbs. request-changes requires a body (GitHub API rule).
+local function review(ctx, flag, verb, body_required)
 	local root = repo_root()
 	if not root then
 		return
 	end
+	local n = ctx.pr.number
+	vim.ui.input({ prompt = ("%s #%d — body%s: "):format(verb, n, body_required and "" or " (optional)") }, function(body)
+		if body == nil then
+			return -- <esc> aborts; empty <cr> proceeds (when body is optional)
+		end
+		if body == "" and body_required then
+			vim.notify(verb .. " needs a body", vim.log.levels.WARN)
+			return
+		end
+		local args = { "pr", "review", tostring(n), flag }
+		if body ~= "" then
+			vim.list_extend(args, { "--body", body })
+		end
+		gh(root, args, ctx, verb:lower() .. " sent on #" .. n)
+	end)
+end
+
+function M.approve(ctx)
+	review(ctx, "--approve", "Approve", false)
+end
+
+function M.request_changes(ctx)
+	review(ctx, "--request-changes", "Request changes", true)
+end
+
+function M.comment(ctx)
+	local root = repo_root()
+	if not root then
+		return
+	end
+	local n = ctx.pr.number
+	vim.ui.input({ prompt = "Comment on #" .. n .. ": " }, function(body)
+		if not body or body == "" then
+			return
+		end
+		gh(root, { "pr", "comment", tostring(n), "--body", body }, ctx, "commented on #" .. n)
+	end)
+end
+
+function M.request_reviewers(ctx)
+	local root = repo_root()
+	if not root then
+		return
+	end
+	local n = ctx.pr.number
 	vim.ui.input({ prompt = "Request reviewers for #" .. n .. " (comma-sep): " }, function(who)
 		if not who or who == "" then
 			return
 		end
-		gh(root, { "pr", "edit", tostring(n), "--add-reviewer", who }, "requested review on #" .. n)
+		gh(root, { "pr", "edit", tostring(n), "--add-reviewer", who }, ctx, "requested review on #" .. n)
 	end)
 end
 
-function M.queue(n)
+function M.queue(ctx)
 	local root = repo_root()
 	if not root then
 		return
 	end
-	gh(root, { "pr", "merge", tostring(n), "--auto", "--squash" }, "auto-merge enabled on #" .. n)
+	gh(root, { "pr", "merge", tostring(ctx.pr.number), "--auto", "--squash" }, ctx, "auto-merge enabled on #" .. ctx.pr.number)
 end
 
-function M.open_web(n)
+function M.checkout(ctx)
 	local root = repo_root()
 	if not root then
 		return
 	end
-	gh(root, { "pr", "view", tostring(n), "--web" }, "opened #" .. n .. " in browser")
+	if ctx.repo then
+		vim.notify("#" .. ctx.pr.number .. " belongs to " .. ctx.repo .. " — checkout only works in its repo", vim.log.levels.WARN)
+		return
+	end
+	gh(root, { "pr", "checkout", tostring(ctx.pr.number) }, ctx, "checked out #" .. ctx.pr.number)
+end
+
+function M.open_web(ctx)
+	local root = repo_root()
+	if not root then
+		return
+	end
+	gh(root, { "pr", "view", tostring(ctx.pr.number), "--web" }, ctx, "opened #" .. ctx.pr.number .. " in browser")
+end
+
+function M.yank_url(ctx)
+	local url = ctx.pr.url or ("https://github.com/%s/pull/%d"):format(ctx.repo or origin_repo(repo_root() or ".") or "?", ctx.pr.number)
+	vim.fn.setreg("+", url)
+	vim.notify("yanked " .. url, vim.log.levels.INFO)
 end
 
 -- ── the central float: `gh pr status` → three buckets ─────────────────────
-local STATUS_FIELDS = "number,title,headRefName,baseRefName,state,reviewDecision,author"
+local STATUS_FIELDS = "number,title,url,headRefName,baseRefName,state,reviewDecision,author"
+
+local HINTS = "  d/⏎ diff · a approve · x changes · c comment · r reviewers · m queue · C checkout · y url · o web · q"
 
 local function build_lines(status)
-	local lines, rows = {}, {} -- rows[i] = { n, base } for the PR on display line i
+	local lines, rows = {}, {} -- rows[i] = pr json for the PR on display line i
 	local function section(title, prs, empty)
 		table.insert(lines, title)
 		table.insert(rows, false)
@@ -480,7 +602,7 @@ local function build_lines(status)
 					decision = "  ●"
 				end
 				table.insert(lines, ("   #%d  %s%s"):format(pr.number, pr.title, decision))
-				table.insert(rows, { n = pr.number, base = pr.baseRefName })
+				table.insert(rows, pr)
 			end
 		end
 		table.insert(lines, "")
@@ -492,7 +614,7 @@ local function build_lines(status)
 	section("◆ Mine", status.createdBy, "none open")
 	section("◇ Review requested", status.needsReview, "inbox clear")
 
-	table.insert(lines, "  d/⏎ diff · a approve · r reviewers · m queue · o web · q close")
+	table.insert(lines, HINTS)
 	table.insert(rows, false)
 	return lines, rows
 end
@@ -530,41 +652,44 @@ local function make_float(lines, title)
 	return buf, win, close
 end
 
--- action keys shared by both floats: fn is called with the PR number + base.
+-- action keys shared by both floats: fn is called with a ctx; acting on a PR
+-- also focuses it, so follow-up global keys (<leader>Pa …) hit the same PR.
 local function bind_actions(buf, close, get)
 	local kopts = { buffer = buf, nowait = true, silent = true }
 	local function act(fn)
 		return function()
-			local n, base = get()
-			if n then
+			local ctx = get()
+			if ctx then
 				close()
-				fn(n, base)
+				set_focus(ctx)
+				fn(ctx)
 			end
 		end
 	end
-	vim.keymap.set("n", "<cr>", act(M.diff), kopts)
-	vim.keymap.set("n", "d", act(M.diff), kopts)
-	vim.keymap.set("n", "a", act(function(n)
-		M.approve(n)
-	end), kopts)
-	vim.keymap.set("n", "r", act(function(n)
-		M.request_reviewers(n)
-	end), kopts)
-	vim.keymap.set("n", "m", act(function(n)
-		M.queue(n)
-	end), kopts)
-	vim.keymap.set("n", "o", act(function(n)
-		M.open_web(n)
-	end), kopts)
+	local keys = {
+		["<cr>"] = M.diff,
+		d = M.diff,
+		a = M.approve,
+		x = M.request_changes,
+		c = M.comment,
+		r = M.request_reviewers,
+		m = M.queue,
+		C = M.checkout,
+		y = M.yank_url,
+		o = M.open_web,
+	}
+	for k, fn in pairs(keys) do
+		vim.keymap.set("n", k, act(fn), kopts)
+	end
 end
 
 -- multi-PR list (the `gh pr status` buckets)
 local function open_float(lines, rows)
 	local buf, win, close = make_float(lines, "  Pull Requests ")
 	bind_actions(buf, close, function()
-		local r = rows[vim.api.nvim_win_get_cursor(win)[1]]
-		if r then
-			return r.n, r.base
+		local pr = rows[vim.api.nvim_win_get_cursor(win)[1]]
+		if pr then
+			return { pr = pr }
 		end
 	end)
 	for i, r in ipairs(rows) do -- land on the first actionable row
@@ -575,8 +700,10 @@ local function open_float(lines, rows)
 	end
 end
 
--- single-PR status detail (the cached branch PR, or an arbitrary one)
-local function open_pr_float(pr)
+-- single-PR status detail. Opening it FOCUSES the PR — from here on, the
+-- global action keys target it.
+local function open_pr_float(pr, repo)
+	set_focus({ pr = pr, repo = repo })
 	local ci_sym, ci_word = ci_of(pr)
 	local author = pr.author and pr.author.login or "?"
 	local lines = {
@@ -588,11 +715,12 @@ local function open_pr_float(pr)
 		("Author   %s"):format(author),
 		("State    %s"):format((pr.state or ""):lower()),
 		"",
-		"  d diff · a approve · r reviewers · m queue · o web · q close",
+		HINTS,
 	}
-	local buf, _, close = make_float(lines, ("  PR #%d "):format(pr.number))
+	local title = repo and ("  %s #%d "):format(repo, pr.number) or ("  PR #%d "):format(pr.number)
+	local buf, _, close = make_float(lines, title)
 	bind_actions(buf, close, function()
-		return pr.number, pr.baseRefName
+		return { pr = pr, repo = repo }
 	end)
 end
 
@@ -644,6 +772,7 @@ function M.current_pr()
 	return entry.pr
 end
 
+-- branch PR float — also the way to re-focus YOUR PR after reviewing others
 function M.current()
 	local pr = M.current_pr()
 	if pr then
@@ -651,21 +780,17 @@ function M.current()
 	end
 end
 
-function M.approve_current()
-	local pr = M.current_pr()
-	if pr then
-		M.approve(pr.number)
-	end
-end
-
-function M.diff_current()
-	local pr = M.current_pr()
-	if pr then
-		M.diff(pr.number, pr.baseRefName)
+-- status float of the focused PR (falls back to the branch PR)
+function M.status()
+	local ctx = target()
+	if ctx then
+		open_pr_float(ctx.pr, ctx.repo)
 	end
 end
 
 -- Jump to any PR by number / #number / github URL → its status float.
+-- A URL from ANOTHER repo works: owner/repo is parsed out of it and every
+-- action (view, diff, approve …) is routed there, no checkout, no cd.
 function M.goto_pr()
 	local root = repo_root()
 	if not root then
@@ -680,7 +805,15 @@ function M.goto_pr()
 			vim.notify("could not find a PR number in that", vim.log.levels.WARN)
 			return
 		end
-		sys({ "gh", "pr", "view", n, "--json", PR_FIELDS }, { cwd = root, text = true }, function(res)
+		local repo = v:match("github%.com/([^/]+/[^/]+)/pull/")
+		if repo and repo == origin_repo(root) then
+			repo = nil -- it's this repo's PR — plain paths (origin refs, checkout) apply
+		end
+		local cmd = { "gh", "pr", "view", n, "--json", PR_FIELDS }
+		if repo then
+			vim.list_extend(cmd, { "-R", repo })
+		end
+		sys(cmd, { cwd = root, text = true }, function(res)
 			vim.schedule(function()
 				if res.code ~= 0 then
 					vim.notify("gh: " .. vim.trim(res.stderr), vim.log.levels.ERROR)
@@ -691,7 +824,7 @@ function M.goto_pr()
 					vim.notify("could not read PR #" .. n, vim.log.levels.ERROR)
 					return
 				end
-				open_pr_float(data)
+				open_pr_float(data, repo)
 			end)
 		end)
 	end)
@@ -745,12 +878,32 @@ function M.setup()
 		end,
 	})
 
-	vim.keymap.set("n", "<leader>Pc", M.current, { desc = "PR: current branch's PR (status float)" })
-	vim.keymap.set("n", "<leader>Pca", M.approve_current, { desc = "PR: approve current" })
-	vim.keymap.set("n", "<leader>Pcd", M.diff_current, { desc = "PR: diff current" })
-	vim.keymap.set("n", "<leader>Pl", M.hub, { desc = "PR: list (current · mine · review-requested)" })
-	vim.keymap.set("n", "<leader>Pg", M.goto_pr, { desc = "PR: go to a PR by number / #n / url" })
-	vim.keymap.set("n", "<leader>gt", M.toggle, { desc = "Toggle inline PR review comments" })
+	-- action keys route through target(): the focused (in-view) PR, else this
+	-- branch's PR. So: <leader>Pg → paste URL → d to diff → <leader>Pa
+	-- approves THAT PR, even from inside the diff. No re-prompting.
+	local function act(fn)
+		return function()
+			local ctx = target()
+			if ctx then
+				fn(ctx)
+			end
+		end
+	end
+	local map = vim.keymap.set
+	map("n", "<leader>Pp", M.status, { desc = "PR: status float (focused, else branch)" })
+	map("n", "<leader>Pb", M.current, { desc = "PR: this branch's PR (re-focuses it)" })
+	map("n", "<leader>Pl", M.hub, { desc = "PR: list (current · mine · review-requested)" })
+	map("n", "<leader>Pg", M.goto_pr, { desc = "PR: go to number / #n / url (any repo)" })
+	map("n", "<leader>Pd", act(M.diff), { desc = "PR: diff in Diffview (no checkout)" })
+	map("n", "<leader>Pa", act(M.approve), { desc = "PR: approve" })
+	map("n", "<leader>Px", act(M.request_changes), { desc = "PR: request changes" })
+	map("n", "<leader>Pc", act(M.comment), { desc = "PR: comment" })
+	map("n", "<leader>Pr", act(M.request_reviewers), { desc = "PR: request reviewers" })
+	map("n", "<leader>Pm", act(M.queue), { desc = "PR: auto-merge / queue (squash)" })
+	map("n", "<leader>PC", act(M.checkout), { desc = "PR: checkout its branch" })
+	map("n", "<leader>Po", act(M.open_web), { desc = "PR: open on github.com" })
+	map("n", "<leader>Py", act(M.yank_url), { desc = "PR: yank url" })
+	map("n", "<leader>gt", M.toggle, { desc = "Toggle inline PR review comments" })
 end
 
 return M
