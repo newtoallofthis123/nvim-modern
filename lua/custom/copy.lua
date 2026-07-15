@@ -77,6 +77,30 @@ function M.copy_buffer_path_with_line()
 	vim.notify("Copied to clipboard: " .. formatted_path)
 end
 
+-- Format an arbitrary absolute path as an @-ref relative to cwd.
+local function format_ref(filepath)
+	if filepath == "" then
+		return "@[No Name]"
+	end
+	local cwd = vim.fn.getcwd()
+	local relative = filepath:gsub(vim.pesc(cwd .. "/"), "")
+	return "@" .. relative
+end
+
+-- Pick a listed buffer via snacks, then paste its @path at the cursor.
+function M.pick_buffer_path()
+	Snacks.picker.buffers({
+		confirm = function(picker, item)
+			picker:close()
+			if not item then
+				return
+			end
+			local ref = format_ref(vim.fn.fnamemodify(item.file, ":p"))
+			vim.api.nvim_put({ ref }, "c", true, true)
+		end,
+	})
+end
+
 function M.copy_root_path()
 	local path = M.get_absolute_filepath()
 	vim.fn.setreg("+", path)
@@ -103,6 +127,11 @@ function M.setup()
 	keymap("n", "<leader>cP", M.copy_root_path, { desc = "Copy absolute file path (from /)" })
 	keymap("n", "<leader>cl", M.copy_buffer_path_with_line, { desc = "Copy buffer path with line (@file#123)" })
 	keymap("v", "<leader>cl", M.copy_buffer_path_with_line, { desc = "Copy buffer path with line range" })
+	keymap("n", "<leader>cb", M.pick_buffer_path, { desc = "Pick buffer, paste @path at cursor" })
+
+	vim.api.nvim_create_user_command("PickBufferPath", M.pick_buffer_path, {
+		desc = "Pick a buffer and paste its @path at the cursor",
+	})
 end
 
 return M

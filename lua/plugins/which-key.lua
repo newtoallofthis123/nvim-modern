@@ -8,6 +8,7 @@ return {
 			{ "<leader>b", group = "buffer" },
 			{ "<leader>c", group = "copy context (LLM)" },
 			{ "<leader>f", group = "find / search" },
+			{ "<leader>fq", group = "quick folders" },
 			{ "<leader>g", group = "git" },
 			{ "<leader>h", group = "hunks (gitsigns)" },
 			{ "<leader>j", group = "just / server" },
